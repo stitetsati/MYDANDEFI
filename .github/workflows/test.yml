@@ -25,6 +25,8 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: nightly
+      - name: Install Dependencies
+        run: npm install
 
       - name: Run Forge build
         run: |
