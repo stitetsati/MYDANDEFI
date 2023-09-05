@@ -4,14 +4,14 @@ import "openzeppelin-contracts/contracts/access/Ownable.sol";
 import "openzeppelin-contracts/contracts/utils/Strings.sol";
 import "./Errors.sol";
 
-contract DepositPass is ERC721Enumerable, Ownable {
+contract MyDanPass is ERC721Enumerable, Ownable {
     using Strings for uint256;
     address public minter;
     uint256 public nextTokenId;
     string private _baseURIExtended;
     event Minted(address to, uint256 tokenId);
 
-    constructor(address _minter) ERC721("DepositPass", "DP") {
+    constructor(address _minter) ERC721("MyDanPass", "MDP") {
         minter = _minter;
     }
 
