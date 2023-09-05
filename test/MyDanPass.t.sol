@@ -3,56 +3,56 @@
 pragma solidity ^0.8.0;
 
 import "forge-std/Test.sol";
-import "../src/DepositPass.sol";
+import "../src/MyDanPass.sol";
 import "../src/Errors.sol";
 
-contract DepositPassTest is Test {
-    DepositPass depositPass;
+contract MyDanPassTest is Test {
+    MyDanPass myDanPass;
     address deadAddress = 0x000000000000000000000000000000000000dEaD;
     address minter = 0x00000000000000000000000000000000DeaDBeef;
 
     constructor() {
-        depositPass = new DepositPass(minter);
+        myDanPass = new MyDanPass(minter);
     }
 
     modifier afterMintOneNft() {
         vm.prank(minter);
-        depositPass.mint(deadAddress);
+        myDanPass.mint(deadAddress);
         _;
     }
 
     function testSetMinter() external {
-        depositPass.setMinter(deadAddress);
-        assertEq(depositPass.minter(), deadAddress);
+        myDanPass.setMinter(deadAddress);
+        assertEq(myDanPass.minter(), deadAddress);
     }
 
     function testSetMinterAccessControl() external {
         vm.prank(deadAddress);
         vm.expectRevert(bytes("Ownable: caller is not the owner"));
-        depositPass.setMinter(deadAddress);
+        myDanPass.setMinter(deadAddress);
     }
 
     function testMintByNonMinter() external {
         vm.expectRevert(NotMinter.selector);
-        depositPass.mint(deadAddress);
+        myDanPass.mint(deadAddress);
     }
 
     function testMintByMinter() external {
         vm.prank(minter);
-        depositPass.mint(deadAddress);
-        assertEq(depositPass.ownerOf(0), deadAddress);
-        assertEq(depositPass.totalSupply(), 1);
+        myDanPass.mint(deadAddress);
+        assertEq(myDanPass.ownerOf(0), deadAddress);
+        assertEq(myDanPass.totalSupply(), 1);
     }
 
     function testSetBaseUri() external afterMintOneNft {
         string memory baseUri = "https://example.com/";
-        depositPass.setBaseURI(baseUri);
-        depositPass.tokenURI(0);
+        myDanPass.setBaseURI(baseUri);
+        myDanPass.tokenURI(0);
     }
 
     function testSetBaseUriAccessControl() external {
         vm.prank(deadAddress);
         vm.expectRevert(bytes("Ownable: caller is not the owner"));
-        depositPass.setBaseURI("https://example.com/");
+        myDanPass.setBaseURI("https://example.com/");
     }
 }
