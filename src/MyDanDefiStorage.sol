@@ -17,7 +17,6 @@ interface IMyDanDefi {
     event MembershipInserted(uint256 index, MembershipTier insertedMembershipTier);
     event DurationBonusRateUpdated(uint256 duration, uint256 newRate);
 
-    // Admin functions, deposit related
     function setAssetsUnderManagementCap(uint256 cap) external;
 
     function editMembershipTier(uint256 index, MembershipTier calldata updatedMembershipTier) external;
@@ -26,8 +25,7 @@ interface IMyDanDefi {
 
     function insertMembershipTiers(MembershipTier[] calldata newMembershipTiers) external;
 
-    // Admin functions, referral related
-    // function setReferralBonusRewardRates(uint256[] calldata rates) external;
+    function setReferralBonusRewardRates(uint256[] calldata rates) external;
 
     // function claimPass(string memory referralCode) external;
 
