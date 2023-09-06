@@ -30,11 +30,12 @@ contract MyDanPass is ERC721Enumerable, Ownable {
         _baseURIExtended = baseURI_;
     }
 
-    function mint(address to) external onlyMinter {
+    function mint(address to) external onlyMinter returns (uint256) {
         uint256 currentTokenId = nextTokenId;
         _mint(to, currentTokenId);
         nextTokenId += 1;
         emit Minted(to, currentTokenId);
+        return currentTokenId;
     }
 
     function tokenURI(uint256 tokenId) public view virtual override returns (string memory) {
