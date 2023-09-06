@@ -9,7 +9,7 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
 
     constructor() {
         // set minter to address(this) and transfer ownership to deployer
-        myDanPass = MyDanPass(address(this));
+        myDanPass = new MyDanPass(address(this));
         myDanPass.transferOwnership(msg.sender);
         // mint a genesis nft and set up the profile
         uint256 tokenId = myDanPass.mint(msg.sender);
@@ -28,6 +28,9 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
     function editMembershipTier(uint256 i, MembershipTier calldata updatedMembershipTier) external onlyOwner {
         if (updatedMembershipTier.interestRate == 0) {
             revert InvalidArgument(updatedMembershipTier.interestRate, "Rate cannot be zero");
+        }
+        if (i >= membershipTiers.length) {
+            revert InvalidArgument(i, "Index out of bounds");
         }
         membershipTiers[i] = updatedMembershipTier;
         emit MembershipUpdated(i, updatedMembershipTier);
