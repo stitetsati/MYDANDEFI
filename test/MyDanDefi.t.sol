@@ -16,7 +16,6 @@ contract MyDanDefiTest is Test {
     }
 
     function testDeploy() external {
-        MyDanPass myDanPass = myDanDefi.myDanPass();
         assertEq(myDanPass.minter(), address(myDanDefi));
         assertEq(myDanPass.owner(), address(this));
         assertEq(myDanPass.ownerOf(0), address(this));
