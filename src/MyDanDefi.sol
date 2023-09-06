@@ -5,6 +5,7 @@ import "openzeppelin-contracts/contracts/access/Ownable.sol";
 
 contract MyDanDefi is Ownable, MyDanDefiStorage {
     string public constant genesisReferralCode = "mydandefi";
+    uint256 public constant genesisTokenId = 0;
     using LowerCaseConverter for string;
 
     constructor() {
@@ -14,7 +15,7 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
         // mint a genesis nft and set up the profile
         uint256 tokenId = myDanPass.mint(msg.sender);
         referralCodes[genesisReferralCode] = tokenId;
-        profiles[tokenId] = Profile({isInUse: true});
+        profiles[tokenId] = Profile({referrerTokenId: tokenId});
     }
 
     function setAssetsUnderManagementCap(uint256 newCap) external onlyOwner {
@@ -67,7 +68,20 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
         referralBonusRewardRates = rates;
     }
 
-    // function claimPass(string memory referralCode) external onlyOwner {
+    function claimPass(string memory referralCode) external returns (uint256) {
+        string memory lowerCaseReferralCode = referralCode.toLowerCase();
+        uint256 referrerTokenId = genesisTokenId;
+        if (keccak256(abi.encodePacked(lowerCaseReferralCode)) != keccak256(abi.encodePacked(genesisReferralCode))) {
+            referrerTokenId = referralCodes[lowerCaseReferralCode];
+            if (referrerTokenId == genesisTokenId) {
+                revert InvalidStringArgument(referralCode, "Referral code does not exist");
+            }
+        }
+        uint256 mintedTokenId = myDanPass.mint(msg.sender);
+        profiles[mintedTokenId] = Profile({referrerTokenId: referrerTokenId});
+        emit PassMinted(msg.sender, mintedTokenId, referrerTokenId);
+        return mintedTokenId;
+    }
 
     // }
     // function setReferralCode(string memory referralCode, uint256 tokenId) external;

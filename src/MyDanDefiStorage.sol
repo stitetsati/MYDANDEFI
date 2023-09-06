@@ -9,13 +9,14 @@ interface IMyDanDefi {
         uint256 interestRate;
     }
     struct Profile {
-        bool isInUse;
+        uint256 referrerTokenId;
     }
 
     event AssetsUnderManagementCapSet(uint256 newCap);
     event MembershipUpdated(uint256 index, MembershipTier updatedMembershipTier);
     event MembershipInserted(uint256 index, MembershipTier insertedMembershipTier);
     event DurationBonusRateUpdated(uint256 duration, uint256 newRate);
+    event PassMinted(address minter, uint256 mintedTokenId, uint256 referrerTokenId);
 
     function setAssetsUnderManagementCap(uint256 cap) external;
 
@@ -27,7 +28,7 @@ interface IMyDanDefi {
 
     function setReferralBonusRewardRates(uint256[] calldata rates) external;
 
-    // function claimPass(string memory referralCode) external;
+    function claimPass(string memory referralCode) external returns (uint256);
 
     // function setReferralCode(string memory referralCode, uint256 tokenId) external;
 

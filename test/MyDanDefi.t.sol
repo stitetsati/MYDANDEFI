@@ -8,9 +8,11 @@ import "../src/MyDanPass.sol";
 
 contract MyDanDefiTest is Test {
     MyDanDefi myDanDefi;
+    MyDanPass myDanPass;
 
     constructor() {
         myDanDefi = new MyDanDefi();
+        myDanPass = myDanDefi.myDanPass();
     }
 
     function testDeploy() external {
@@ -108,5 +110,16 @@ contract MyDanDefiTest is Test {
         rates[1] = 0;
         vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, rates[1], "Rate cannot be zero"));
         myDanDefi.setReferralBonusRewardRates(rates);
+    }
+
+    function testClaimPass() external {
+        uint256 mintedTokenId = myDanDefi.claimPass(myDanDefi.genesisReferralCode());
+        assertEq(myDanPass.ownerOf(mintedTokenId), address(this));
+        uint256 referrerTokenId = myDanDefi.profiles(mintedTokenId);
+        assertEq(referrerTokenId, myDanDefi.genesisTokenId());
+        // test non genesis referral code
+        string memory referralCode = "mydandefi2";
+        vm.expectRevert(abi.encodeWithSelector(InvalidStringArgument.selector, referralCode, "Referral code does not exist"));
+        myDanDefi.claimPass(referralCode);
     }
 }
