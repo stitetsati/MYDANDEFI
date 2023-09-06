@@ -7,8 +7,10 @@ import "../src/MyDanDefi.sol";
 import "../src/MyDanPass.sol";
 
 contract MyDanDefiTest is Test {
+    using LowerCaseConverter for string;
     MyDanDefi myDanDefi;
     MyDanPass myDanPass;
+    address deadAddress = 0x000000000000000000000000000000000000dEaD;
 
     constructor() {
         myDanDefi = new MyDanDefi();
@@ -114,11 +116,65 @@ contract MyDanDefiTest is Test {
     function testClaimPass() external {
         uint256 mintedTokenId = myDanDefi.claimPass(myDanDefi.genesisReferralCode());
         assertEq(myDanPass.ownerOf(mintedTokenId), address(this));
-        uint256 referrerTokenId = myDanDefi.profiles(mintedTokenId);
+        (uint256 referrerTokenId, ) = myDanDefi.profiles(mintedTokenId);
         assertEq(referrerTokenId, myDanDefi.genesisTokenId());
         // test non genesis referral code
         string memory referralCode = "mydandefi2";
         vm.expectRevert(abi.encodeWithSelector(InvalidStringArgument.selector, referralCode, "Referral code does not exist"));
         myDanDefi.claimPass(referralCode);
+    }
+
+    function testSetReferralCodeOnBehalf() external {
+        // mint a pass
+        uint256 mintedTokenId = myDanDefi.claimPass(myDanDefi.genesisReferralCode());
+        // set referral code by non owner
+        vm.startPrank(deadAddress);
+        vm.expectRevert(abi.encodeWithSelector(NotTokenOwner.selector, mintedTokenId, deadAddress, myDanPass.ownerOf(mintedTokenId)));
+        string memory referralCode = "random";
+        myDanDefi.setReferralCode(referralCode, mintedTokenId);
+    }
+
+    function testSetReferralCodeConflictingWithGenesis() external {
+        // mint a pass
+        uint256 mintedTokenId = myDanDefi.claimPass(myDanDefi.genesisReferralCode());
+        // set referral code by non owner
+        string memory referralCode = myDanDefi.genesisReferralCode();
+        vm.expectRevert(abi.encodeWithSelector(InvalidStringArgument.selector, referralCode, "Referral code cannot be genesis referral code"));
+        myDanDefi.setReferralCode(referralCode, mintedTokenId);
+    }
+
+    function testSetReferralCodeAlreadyInUse() external {
+        // mint a pass
+        uint256 mintedTokenId1 = myDanDefi.claimPass(myDanDefi.genesisReferralCode());
+        uint256 mintedTokenId2 = myDanDefi.claimPass(myDanDefi.genesisReferralCode());
+        string memory referralCode = "hello";
+        myDanDefi.setReferralCode(referralCode, mintedTokenId1);
+        vm.expectRevert(abi.encodeWithSelector(InvalidStringArgument.selector, referralCode, "Referral code already used by other tokenId"));
+        myDanDefi.setReferralCode(referralCode, mintedTokenId2);
+    }
+
+    function testSetReferralCodeTwice() external {
+        // mint a pass
+        uint256 mintedTokenId = myDanDefi.claimPass(myDanDefi.genesisReferralCode());
+        string memory referralCode = "hello";
+        myDanDefi.setReferralCode(referralCode, mintedTokenId);
+        string memory newReferralCode = "hello2";
+        vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, mintedTokenId, "Referral code already set"));
+        myDanDefi.setReferralCode(newReferralCode, mintedTokenId);
+    }
+
+    function testSetReferralCode() external {
+        // mint a pass
+        uint256 mintedTokenId = myDanDefi.claimPass(myDanDefi.genesisReferralCode());
+        string memory referralCode = "HeLLo";
+        string memory lowerCaseReferralCode = "hello";
+        // set mixed case as ref code
+        myDanDefi.setReferralCode(referralCode, mintedTokenId);
+        // assert lower case ref code is set as key
+        assertEq(myDanDefi.referralCodes(lowerCaseReferralCode), mintedTokenId);
+        (uint256 referrerTokenId, string memory setReferralCode) = myDanDefi.profiles(mintedTokenId);
+        assertEq(referrerTokenId, myDanDefi.genesisTokenId());
+        // assert lower case ref code is set in profile storage
+        assertEq(setReferralCode, lowerCaseReferralCode);
     }
 }

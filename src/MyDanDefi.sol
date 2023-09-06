@@ -15,7 +15,7 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
         // mint a genesis nft and set up the profile
         uint256 tokenId = myDanPass.mint(msg.sender);
         referralCodes[genesisReferralCode] = tokenId;
-        profiles[tokenId] = Profile({referrerTokenId: tokenId});
+        profiles[tokenId] = Profile({referrerTokenId: tokenId, referralCode: genesisReferralCode});
     }
 
     function setAssetsUnderManagementCap(uint256 newCap) external onlyOwner {
@@ -78,13 +78,30 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
             }
         }
         uint256 mintedTokenId = myDanPass.mint(msg.sender);
-        profiles[mintedTokenId] = Profile({referrerTokenId: referrerTokenId});
+        profiles[mintedTokenId] = Profile({referrerTokenId: referrerTokenId, referralCode: ""});
         emit PassMinted(msg.sender, mintedTokenId, referrerTokenId);
         return mintedTokenId;
     }
 
-    // }
-    // function setReferralCode(string memory referralCode, uint256 tokenId) external;
+    function setReferralCode(string memory referralCode, uint256 tokenId) external {
+        if (msg.sender != myDanPass.ownerOf(tokenId)) {
+            revert NotTokenOwner(tokenId, msg.sender, myDanPass.ownerOf(tokenId));
+        }
+        string memory lowerCaseReferralCode = referralCode.toLowerCase();
+        // != generis, cant be used already, not set already for this token Id
+        if (keccak256(abi.encodePacked(lowerCaseReferralCode)) == keccak256(abi.encodePacked(genesisReferralCode))) {
+            revert InvalidStringArgument(referralCode, "Referral code cannot be genesis referral code");
+        }
+        if (referralCodes[lowerCaseReferralCode] != genesisTokenId) {
+            revert InvalidStringArgument(referralCode, "Referral code already used by other tokenId");
+        }
+        if (bytes(profiles[tokenId].referralCode).length != 0) {
+            revert InvalidArgument(tokenId, "Referral code already set");
+        }
+        referralCodes[lowerCaseReferralCode] = tokenId;
+        profiles[tokenId].referralCode = lowerCaseReferralCode;
+        emit ReferralCodeCreated(lowerCaseReferralCode, tokenId);
+    }
     // function deposit(uint256 tokenId, uint256 amount, uint256 duration) external;
     // function withdraw(uint256 tokenId, uint256[] memory depositIds[]) external;
     // function claimRewards(uint256 tokenId, uint256[] memory depositIds[]) external;
