@@ -39,8 +39,8 @@ contract MyDanPassTest is Test {
 
     function testMintByMinter() external {
         vm.prank(minter);
-        myDanPass.mint(deadAddress);
-        assertEq(myDanPass.ownerOf(0), deadAddress);
+        uint256 tokenId = myDanPass.mint(deadAddress);
+        assertEq(myDanPass.ownerOf(tokenId), deadAddress);
         assertEq(myDanPass.totalSupply(), 1);
     }
 
