@@ -10,6 +10,7 @@ interface IMyDanDefi {
     }
     struct Profile {
         uint256 referrerTokenId;
+        string referralCode;
     }
 
     event AssetsUnderManagementCapSet(uint256 newCap);
@@ -17,6 +18,7 @@ interface IMyDanDefi {
     event MembershipInserted(uint256 index, MembershipTier insertedMembershipTier);
     event DurationBonusRateUpdated(uint256 duration, uint256 newRate);
     event PassMinted(address minter, uint256 mintedTokenId, uint256 referrerTokenId);
+    event ReferralCodeCreated(string referralCode, uint256 tokenId);
 
     function setAssetsUnderManagementCap(uint256 cap) external;
 
@@ -30,7 +32,7 @@ interface IMyDanDefi {
 
     function claimPass(string memory referralCode) external returns (uint256);
 
-    // function setReferralCode(string memory referralCode, uint256 tokenId) external;
+    function setReferralCode(string memory referralCode, uint256 tokenId) external;
 
     // function deposit(uint256 tokenId, uint256 amount, uint256 duration) external;
 
