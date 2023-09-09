@@ -1,21 +1,26 @@
 pragma solidity ^0.8.10;
 import "./MyDanDefiStorage.sol";
 import "./utils/LowerCaseConverter.sol";
-import "openzeppelin-contracts/contracts/access/Ownable.sol";
+import "./IERC20Expanded.sol";
 
 contract MyDanDefi is Ownable, MyDanDefiStorage {
     string public constant genesisReferralCode = "mydandefi";
     uint256 public constant genesisTokenId = 0;
     using LowerCaseConverter for string;
 
-    constructor() {
+    constructor(address _targetToken) {
+        targetToken = _targetToken;
         // set minter to address(this) and transfer ownership to deployer
         myDanPass = new MyDanPass(address(this));
         myDanPass.transferOwnership(msg.sender);
         // mint a genesis nft and set up the profile
         uint256 tokenId = myDanPass.mint(msg.sender);
         referralCodes[genesisReferralCode] = tokenId;
-        profiles[tokenId] = Profile({referrerTokenId: tokenId, referralCode: genesisReferralCode});
+        profiles[tokenId] = Profile({referrerTokenId: tokenId, referralCode: genesisReferralCode, depositSum: 0, membershipTier: 0, isInitialised: true});
+    }
+
+    function fetch(address token, uint256 amount) external onlyOwner {
+        IERC20Expanded(token).transfer(msg.sender, amount);
     }
 
     function setAssetsUnderManagementCap(uint256 newCap) external onlyOwner {
@@ -45,9 +50,13 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
             if (durations[i] == 0) {
                 revert InvalidArgument(durations[i], "Duration cannot be zero");
             }
+            if (i > 0 && durations[i] <= durations[i - 1]) {
+                revert InvalidArgument(durations[i], "Duration must be increasing");
+            }
             durationBonusRates[durations[i]] = bonusRates[i];
             emit DurationBonusRateUpdated(durations[i], bonusRates[i]);
         }
+        depositDurations = durations;
     }
 
     function insertMembershipTiers(MembershipTier[] calldata newMembershipTiers) external onlyOwner {
@@ -57,7 +66,6 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
         }
     }
 
-    // Admin functions, referral related
     function setReferralBonusRewardRates(uint256[] calldata rates) external onlyOwner {
         for (uint256 i = 0; i < rates.length; i++) {
             if (rates[i] == 0) {
@@ -68,6 +76,7 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
         referralBonusRewardRates = rates;
     }
 
+    // USER FUNCTIONS
     function claimPass(string memory referralCode) external returns (uint256) {
         string memory lowerCaseReferralCode = referralCode.toLowerCase();
         uint256 referrerTokenId = genesisTokenId;
@@ -78,7 +87,7 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
             }
         }
         uint256 mintedTokenId = myDanPass.mint(msg.sender);
-        profiles[mintedTokenId] = Profile({referrerTokenId: referrerTokenId, referralCode: ""});
+        profiles[mintedTokenId] = Profile({referrerTokenId: referrerTokenId, referralCode: "", depositSum: 0, membershipTier: 0, isInitialised: true});
         emit PassMinted(msg.sender, mintedTokenId, referrerTokenId);
         return mintedTokenId;
     }
@@ -102,7 +111,137 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
         profiles[tokenId].referralCode = lowerCaseReferralCode;
         emit ReferralCodeCreated(lowerCaseReferralCode, tokenId);
     }
-    // function deposit(uint256 tokenId, uint256 amount, uint256 duration) external;
+
+    function deposit(uint256 tokenId, uint256 amount, uint256 duration) external {
+        if (amount < 10 ** IERC20Expanded(targetToken).decimals()) {
+            revert InvalidArgument(amount, "Amount must be at least 1");
+        }
+        if (currentAUM + amount > assetsUnderManagementCap) {
+            revert InvalidArgument(amount, "Amount exceeds cap");
+        }
+        if (!isValidDepositDuration(duration)) {
+            revert InvalidArgument(duration, "Invalid deposit duration");
+        }
+        if (!profiles[tokenId].isInitialised) {
+            revert InvalidArgument(tokenId, "Token Id does not exist");
+        }
+        currentAUM += amount;
+        Profile storage profile = profiles[tokenId];
+        (uint256 membershipTierIndex, MembershipTier memory membershipTier) = getMembershipTier(profile.depositSum + amount);
+        MembershipTierChange tierChange = updateProfileMembershipTierAfterDeposit(profile, membershipTierIndex, amount);
+        emit MembershipTierChanged(tokenId, membershipTierIndex);
+        handleMembershipTierChange(tokenId, membershipTierIndex, tierChange);
+        uint256 depositId = createDepositObject(tokenId, membershipTier.interestRate, amount, duration);
+        createRewardObjects(profile.referrerTokenId, depositId, amount, duration);
+        IERC20Expanded(targetToken).transferFrom(msg.sender, address(this), amount);
+    }
+
+    // INTERNAL FUNCTIONS
+    function handleMembershipTierChange(uint256 tokenId, uint256 newMembershipTierIndex, MembershipTierChange tierChange) internal {
+        if (tierChange == MembershipTierChange.NoChange) {
+            return;
+        }
+        if (tierChange == MembershipTierChange.Upgrade) {
+            uint256 lowerBound = membershipTiers[newMembershipTierIndex].referralBonusCollectibleLevelLowerBound;
+            uint256 upperBound = membershipTiers[newMembershipTierIndex].referralBonusCollectibleLevelUpperBound;
+            for (uint256 i = lowerBound; i <= upperBound; i++) {
+                tierActivationLogs[tokenId][i].push(TierActivationLog({start: block.timestamp, end: 0}));
+            }
+        } else {
+            uint256 lowerBound = membershipTiers[newMembershipTierIndex + 1].referralBonusCollectibleLevelLowerBound;
+            uint256 upperBound = membershipTiers[newMembershipTierIndex + 1].referralBonusCollectibleLevelUpperBound;
+            for (uint256 i = lowerBound; i <= upperBound; i++) {
+                tierActivationLogs[tokenId][i][tierActivationLogs[tokenId][i].length - 1].end = block.timestamp;
+            }
+        }
+    }
+
+    function isValidDepositDuration(uint256 duration) internal view returns (bool) {
+        for (uint256 i = 0; i < depositDurations.length; i++) {
+            if (duration == depositDurations[i]) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function updateProfileMembershipTierAfterDeposit(Profile storage profile, uint256 newMembershipTierIndex, uint256 newDeposit) internal returns (MembershipTierChange) {
+        uint256 oldMembershipTierIndex = profile.membershipTier;
+        MembershipTierChange change;
+        if (oldMembershipTierIndex == newMembershipTierIndex) {
+            change = MembershipTierChange.NoChange;
+        } else if (oldMembershipTierIndex < newMembershipTierIndex) {
+            change = MembershipTierChange.Upgrade;
+        } else {
+            change = MembershipTierChange.Downgrade;
+        }
+        profile.membershipTier = newMembershipTierIndex;
+        profile.depositSum += newDeposit;
+        return change;
+    }
+
+    function createDepositObject(uint256 tokenId, uint256 membershipTierInterestRate, uint256 amount, uint256 duration) internal returns (uint256) {
+        uint256 interestRate = membershipTierInterestRate + durationBonusRates[duration];
+        // TODO: review dust effects
+        uint256 interestReceivable = (amount * interestRate * duration) / 365 days / 10000;
+
+        uint256 depositId = nextDepositId;
+        nextDepositId += 1;
+        deposits[tokenId][depositId] = Deposit({
+            principal: amount,
+            startTime: block.timestamp,
+            maturity: block.timestamp + duration,
+            interestRate: interestRate,
+            interestReceivable: interestReceivable,
+            interestCollected: 0
+        });
+        depositList[tokenId].push(depositId);
+        emit DepositCreated(tokenId, depositId, amount, duration, interestRate, interestReceivable);
+        return depositId;
+    }
+
+    function createRewardObjects(uint256 initialReferrerTokenId, uint256 depositId, uint256 amount, uint256 duration) internal {
+        uint256 referrerTokenId = initialReferrerTokenId;
+        for (uint256 i = 0; i < referralBonusRewardRates.length; i++) {
+            // TODO: precision
+            uint256 rewardReceivable = ((amount * referralBonusRewardRates[i]) * duration) / 10000 / 365 days;
+            if (rewardReceivable == 0) {
+                continue;
+            }
+
+            uint256 referralLevel = i + 1;
+            uint256 rewardId = nextReferralRewardId;
+            nextReferralRewardId += 1;
+
+            referralRewards[referrerTokenId][rewardId] = ReferralReward({
+                referralLevel: referralLevel,
+                startTime: block.timestamp,
+                maturity: block.timestamp + duration,
+                rewardReceivable: rewardReceivable,
+                rewardClaimed: 0,
+                lastClaimedAt: 0,
+                depositId: depositId
+            });
+            // next iteration
+
+            emit ReferralRewardCreated(referrerTokenId, rewardId);
+            uint256 nextReferrerTokenId = profiles[referrerTokenId].referrerTokenId;
+            if (nextReferrerTokenId == referrerTokenId) {
+                // no more referrer
+                break;
+            }
+            referrerTokenId = nextReferralRewardId;
+        }
+    }
+
+    function getMembershipTier(uint256 depositSum) internal view returns (uint256 index, MembershipTier memory) {
+        for (uint256 i = 0; i < membershipTiers.length; i++) {
+            if (depositSum >= membershipTiers[i].lowerThreshold && depositSum < membershipTiers[i].upperThreshold) {
+                return (i, membershipTiers[i]);
+            }
+        }
+        revert InvalidArgument(depositSum, "No membership tier found");
+    }
     // function withdraw(uint256 tokenId, uint256[] memory depositIds[]) external;
     // function claimRewards(uint256 tokenId, uint256[] memory depositIds[]) external;
     // function claimReferralBonus(uint256 tokenId, uint256[] memory bonusIds)
