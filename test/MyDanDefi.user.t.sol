@@ -4,6 +4,7 @@ pragma solidity ^0.8.0;
 
 import "forge-std/Test.sol";
 import "../src/MyDanDefi.sol";
+import "../src/MyDanDefiStorage.sol";
 import "../src/MyDanPass.sol";
 import "./mocks/MockERC20.sol";
 import "openzeppelin-contracts/contracts/utils/Strings.sol";
@@ -17,6 +18,7 @@ contract MyDanDefiTest is Test {
     MockERC20 mockERC20 = new MockERC20();
     uint256 oneDollar = 10 ** mockERC20.decimals();
     uint256 referralBonusMaxLevel;
+    event ReferralRewardCreated(uint256 referrerTokenId, uint256 rewardId);
 
     constructor() {}
 
@@ -77,7 +79,8 @@ contract MyDanDefiTest is Test {
     }
 
     function setReferralBonusRewardRates() internal {
-        uint256[] memory rates = new uint256[](7);
+        uint256 length = 7;
+        uint256[] memory rates = new uint256[](length);
         rates[0] = 600;
         rates[1] = 200;
         rates[2] = 200;
@@ -86,7 +89,7 @@ contract MyDanDefiTest is Test {
         rates[5] = 100;
         rates[6] = 100;
         myDanDefi.setReferralBonusRewardRates(rates);
-        referralBonusMaxLevel = rates.length;
+        referralBonusMaxLevel = length;
     }
 
     modifier Setup() {
@@ -233,7 +236,7 @@ contract MyDanDefiTest is Test {
         }
     }
 
-    function testDepositWithUpgrade() external Setup {
+    function testDepositWithOneUpgrade() external Setup {
         uint256 testAmount = oneDollar * 100;
         mockERC20.mint(address(this), testAmount);
         mockERC20.approve(address(myDanDefi), testAmount);
@@ -272,8 +275,52 @@ contract MyDanDefiTest is Test {
         }
     }
 
-    function testDepositWithDurationBonus() external {
-        // TODO
+    function testDepositWithThreeUpgrade() external Setup {
+        uint256 testAmount = oneDollar * 100000;
+        mockERC20.mint(address(this), testAmount);
+        mockERC20.approve(address(myDanDefi), testAmount);
+        uint256 tokenId = myDanDefi.claimPass(myDanDefi.genesisReferralCode());
+        uint256 validDuration = myDanDefi.depositDurations(0);
+        myDanDefi.deposit(tokenId, testAmount, validDuration);
+        (, , , uint256 membershipTierIndex, ) = myDanDefi.profiles(tokenId);
+        assertEq(membershipTierIndex, 3);
+        (, , , uint256 tierInterestRate, , uint256 referralBonusCollectibleLevelUpperBound) = myDanDefi.membershipTiers(membershipTierIndex);
+        {
+            (uint256 principal, uint256 startTime, uint256 maturity, uint256 interestRate, uint256 interestReceivable, uint256 interestCollected) = myDanDefi.deposits(tokenId, 0);
+            assertEq(principal, testAmount);
+            assertEq(startTime, block.timestamp);
+            assertEq(maturity, block.timestamp + validDuration);
+            assertEq(interestRate, tierInterestRate);
+            assertEq(interestReceivable, (((principal * tierInterestRate) / 10000) * validDuration) / 365 days);
+            assertEq(interestCollected, 0);
+        }
+        {
+            for (uint256 referralLevel = 1; referralLevel <= referralBonusCollectibleLevelUpperBound; referralLevel++) {
+                (uint256 activationStart, uint256 activationEnd) = myDanDefi.tierActivationLogs(tokenId, referralLevel, 0);
+                assertEq(activationStart, block.timestamp);
+                assertEq(activationEnd, 0);
+            }
+        }
+    }
+
+    function testDepositWithDurationBonus() external Setup {
+        uint256 testAmount = oneDollar * 100;
+        mockERC20.mint(address(this), testAmount);
+        mockERC20.approve(address(myDanDefi), testAmount);
+        uint256 tokenId = myDanDefi.claimPass(myDanDefi.genesisReferralCode());
+        uint256 durationIndex = 3;
+        uint256 validDuration = myDanDefi.depositDurations(durationIndex);
+        uint256 durationBonus = myDanDefi.durationBonusRates(validDuration);
+        assertTrue(durationBonus > 0);
+        myDanDefi.deposit(tokenId, testAmount, validDuration);
+        (, , , uint256 membershipTierIndex, ) = myDanDefi.profiles(tokenId);
+        (, , , uint256 tierInterestRate, , ) = myDanDefi.membershipTiers(membershipTierIndex);
+        {
+            (uint256 principal, , , uint256 interestRate, uint256 interestReceivable, ) = myDanDefi.deposits(tokenId, 0);
+            uint256 totalInterestRate = tierInterestRate + durationBonus;
+            assertEq(interestRate, totalInterestRate);
+            assertEq(interestReceivable, (((principal * totalInterestRate) / 10000) * validDuration) / 365 days);
+        }
     }
 
     function testDepositAsLastLevelReferral() external Setup {
@@ -282,27 +329,20 @@ contract MyDanDefiTest is Test {
         mockERC20.approve(address(myDanDefi), testAmount);
         uint256 tokenId;
         string memory referralCode = myDanDefi.genesisReferralCode();
+        uint256 referrerId = 0;
         for (uint256 i = 0; i < referralBonusMaxLevel; i++) {
             tokenId = myDanDefi.claimPass(referralCode);
-            referralCode = i.toString();
+            // referralIds[tokenId] = referrerId;
+            referralCode = string(abi.encodePacked("referrerCodeMadeBy", tokenId.toString()));
             myDanDefi.setReferralCode(referralCode, tokenId);
+            // referrerId = tokenId;
         }
         uint256 validDuration = myDanDefi.depositDurations(0);
+
+        for (uint256 i = 0; i < referralBonusMaxLevel; i++) {
+            vm.expectEmit(false, false, false, true);
+            emit ReferralRewardCreated(referralBonusMaxLevel - (i + 1), i);
+        }
         myDanDefi.deposit(tokenId, testAmount, validDuration);
-        // TODO: test 7 referralReward objects contents
-        // (uint256 referrerTokenId, , , uint256 membershipTierIndex, ) = myDanDefi.profiles(tokenId);
-        // assertEq(membershipTierIndex, 1);
-        // {
-        //     (uint256 referralLevel, uint256 referralStartTime, uint256 referralMaturity, uint256 rewardReceivable, uint256 rewardClaimed, uint256 lastClaimedAt, uint256 depositId) = myDanDefi
-        //         .referralRewards(referrerTokenId, 0);
-        //     assertEq(referralLevel, 1);
-        //     assertEq(referralStartTime, block.timestamp);
-        //     assertEq(referralMaturity, block.timestamp + validDuration);
-        //     assertEq(rewardReceivable, (((myDanDefi.referralBonusRewardRates(0) * oneDollar * 100) / 10000) * validDuration) / 365 days);
-        //     assertEq(rewardClaimed, 0);
-        //     assertEq(lastClaimedAt, 0);
-        //     assertEq(depositId, 0);
-        // }
     }
-    // TODO: test deposit as 7th level referral
 }

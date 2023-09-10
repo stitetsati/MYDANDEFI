@@ -3,6 +3,8 @@ import "./MyDanDefiStorage.sol";
 import "./utils/LowerCaseConverter.sol";
 import "./IERC20Expanded.sol";
 
+import "forge-std/Test.sol";
+
 contract MyDanDefi is Ownable, MyDanDefiStorage {
     string public constant genesisReferralCode = "mydandefi";
     uint256 public constant genesisTokenId = 0;
@@ -128,30 +130,34 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
         currentAUM += amount;
         Profile storage profile = profiles[tokenId];
         (uint256 membershipTierIndex, MembershipTier memory membershipTier) = getMembershipTier(profile.depositSum + amount);
-        MembershipTierChange tierChange = updateProfileMembershipTierAfterDeposit(profile, membershipTierIndex, amount);
+        MembershipTierChange memory tierChange = updateProfileMembershipTierAfterDeposit(profile, membershipTierIndex, amount);
         emit MembershipTierChanged(tokenId, membershipTierIndex);
-        handleMembershipTierChange(tokenId, membershipTierIndex, tierChange);
+        handleMembershipTierChange(tokenId, tierChange);
         uint256 depositId = createDepositObject(tokenId, membershipTier.interestRate, amount, duration);
         createRewardObjects(profile.referrerTokenId, depositId, amount, duration);
         IERC20Expanded(targetToken).transferFrom(msg.sender, address(this), amount);
     }
 
     // INTERNAL FUNCTIONS
-    function handleMembershipTierChange(uint256 tokenId, uint256 newMembershipTierIndex, MembershipTierChange tierChange) internal {
-        if (tierChange == MembershipTierChange.NoChange) {
+    function handleMembershipTierChange(uint256 tokenId, MembershipTierChange memory tierChange) internal {
+        if (tierChange.oldTier == tierChange.newTier) {
             return;
-        }
-        if (tierChange == MembershipTierChange.Upgrade) {
-            uint256 lowerBound = membershipTiers[newMembershipTierIndex].referralBonusCollectibleLevelLowerBound;
-            uint256 upperBound = membershipTiers[newMembershipTierIndex].referralBonusCollectibleLevelUpperBound;
-            for (uint256 i = lowerBound; i <= upperBound; i++) {
-                tierActivationLogs[tokenId][i].push(TierActivationLog({start: block.timestamp, end: 0}));
+        } else if (tierChange.newTier > tierChange.oldTier) {
+            // upgrade
+            for (uint256 tier = tierChange.oldTier + 1; tier <= tierChange.newTier; tier++) {
+                uint256 lowerBound = membershipTiers[tier].referralBonusCollectibleLevelLowerBound;
+                uint256 upperBound = membershipTiers[tier].referralBonusCollectibleLevelUpperBound;
+                for (uint256 i = lowerBound; i <= upperBound; i++) {
+                    tierActivationLogs[tokenId][i].push(TierActivationLog({start: block.timestamp, end: 0}));
+                }
             }
         } else {
-            uint256 lowerBound = membershipTiers[newMembershipTierIndex + 1].referralBonusCollectibleLevelLowerBound;
-            uint256 upperBound = membershipTiers[newMembershipTierIndex + 1].referralBonusCollectibleLevelUpperBound;
-            for (uint256 i = lowerBound; i <= upperBound; i++) {
-                tierActivationLogs[tokenId][i][tierActivationLogs[tokenId][i].length - 1].end = block.timestamp;
+            for (uint256 tier = tierChange.oldTier; tier >= tierChange.newTier; tier--) {
+                uint256 lowerBound = membershipTiers[tier].referralBonusCollectibleLevelLowerBound;
+                uint256 upperBound = membershipTiers[tier].referralBonusCollectibleLevelUpperBound;
+                for (uint256 i = lowerBound; i <= upperBound; i++) {
+                    tierActivationLogs[tokenId][i][tierActivationLogs[tokenId][i].length - 1].end = block.timestamp;
+                }
             }
         }
     }
@@ -165,19 +171,11 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
         return false;
     }
 
-    function updateProfileMembershipTierAfterDeposit(Profile storage profile, uint256 newMembershipTierIndex, uint256 newDeposit) internal returns (MembershipTierChange) {
+    function updateProfileMembershipTierAfterDeposit(Profile storage profile, uint256 newMembershipTierIndex, uint256 newDeposit) internal returns (MembershipTierChange memory) {
         uint256 oldMembershipTierIndex = profile.membershipTier;
-        MembershipTierChange change;
-        if (oldMembershipTierIndex == newMembershipTierIndex) {
-            change = MembershipTierChange.NoChange;
-        } else if (oldMembershipTierIndex < newMembershipTierIndex) {
-            change = MembershipTierChange.Upgrade;
-        } else {
-            change = MembershipTierChange.Downgrade;
-        }
         profile.membershipTier = newMembershipTierIndex;
         profile.depositSum += newDeposit;
-        return change;
+        return MembershipTierChange({oldTier: oldMembershipTierIndex, newTier: newMembershipTierIndex});
     }
 
     function createDepositObject(uint256 tokenId, uint256 membershipTierInterestRate, uint256 amount, uint256 duration) internal returns (uint256) {
@@ -202,6 +200,7 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
 
     function createRewardObjects(uint256 initialReferrerTokenId, uint256 depositId, uint256 amount, uint256 duration) internal {
         uint256 referrerTokenId = initialReferrerTokenId;
+
         for (uint256 i = 0; i < referralBonusRewardRates.length; i++) {
             // TODO: precision
             uint256 rewardReceivable = ((amount * referralBonusRewardRates[i]) * duration) / 10000 / 365 days;
@@ -211,6 +210,7 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
 
             uint256 referralLevel = i + 1;
             uint256 rewardId = nextReferralRewardId;
+
             nextReferralRewardId += 1;
 
             referralRewards[referrerTokenId][rewardId] = ReferralReward({
@@ -226,11 +226,12 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
 
             emit ReferralRewardCreated(referrerTokenId, rewardId);
             uint256 nextReferrerTokenId = profiles[referrerTokenId].referrerTokenId;
+
             if (nextReferrerTokenId == referrerTokenId) {
                 // no more referrer
                 break;
             }
-            referrerTokenId = nextReferralRewardId;
+            referrerTokenId = nextReferrerTokenId;
         }
     }
 

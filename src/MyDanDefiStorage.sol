@@ -47,10 +47,9 @@ interface IMyDanDefi {
         uint256 start;
         uint256 end;
     }
-    enum MembershipTierChange {
-        NoChange,
-        Upgrade,
-        Downgrade
+    struct MembershipTierChange {
+        uint256 oldTier;
+        uint256 newTier;
     }
 
     function setAssetsUnderManagementCap(uint256 cap) external;
