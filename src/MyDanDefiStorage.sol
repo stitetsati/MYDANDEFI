@@ -68,7 +68,9 @@ interface IMyDanDefi {
 
     function setReferralCode(string memory referralCode, uint256 tokenId) external;
 
-    function claimInterests(uint256 tokenId, uint256[] calldata depositIds) external; // function deposit(uint256 tokenId, uint256 amount, uint256 duration) external;
+    function claimInterests(uint256 tokenId, uint256[] calldata depositIds) external returns (uint256);
+
+    function deposit(uint256 tokenId, uint256 amount, uint256 duration) external;
     // function withdraw(uint256 tokenId, uint256[] memory depositIds) external;
     // function claimReferralBonus(uint256 tokenId, uint256[] memory bonusIds) external;
 }

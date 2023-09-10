@@ -2,6 +2,7 @@ pragma solidity ^0.8.10;
 import "./MyDanDefiStorage.sol";
 import "./utils/LowerCaseConverter.sol";
 import "./IERC20Expanded.sol";
+import "forge-std/Test.sol";
 
 contract MyDanDefi is Ownable, MyDanDefiStorage {
     string public constant genesisReferralCode = "mydandefi";
@@ -136,7 +137,7 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
         IERC20Expanded(targetToken).transferFrom(msg.sender, address(this), amount);
     }
 
-    function claimInterests(uint256 tokenId, uint256[] calldata depositIds) external {
+    function claimInterests(uint256 tokenId, uint256[] calldata depositIds) external returns (uint256) {
         if (!profiles[tokenId].isInitialised) {
             revert InvalidArgument(tokenId, "Token Id does not exist");
         }
@@ -150,13 +151,18 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
             uint256 durationPassed = block.timestamp - max(deposit.lastClaimedAt, deposit.startTime);
             // TODO: check dust precision
             uint256 interestCollectible = (deposit.interestReceivable * durationPassed) / (deposit.maturity - deposit.startTime);
-            assert(interestCollectible + deposit.interestCollected <= deposit.interestReceivable);
+            if (interestCollectible + deposit.interestCollected > deposit.interestReceivable) {
+                interestCollectible = deposit.interestReceivable - deposit.interestCollected;
+            }
             deposits[tokenId][depositIds[i]].interestCollected = deposit.interestCollected + interestCollectible;
             deposits[tokenId][depositIds[i]].lastClaimedAt = block.timestamp;
             emit InterestClaimed(tokenId, depositIds[i], interestCollectible);
             totalInterest += interestCollectible;
         }
-        IERC20Expanded(targetToken).transfer(receiver, totalInterest);
+        if (totalInterest > 0) {
+            IERC20Expanded(targetToken).transfer(receiver, totalInterest);
+        }
+        return totalInterest;
     }
 
     function max(uint256 a, uint256 b) internal pure returns (uint256) {

@@ -377,4 +377,31 @@ contract MyDanDefiTest is Test {
         assertEq(interestCollected, expectedInterestClaimed);
         assertEq(lastClaimedAt, block.timestamp);
     }
+
+    function testClaimInterestsMultipleTimes() external Setup {
+        uint256 testAmount = oneDollar * 100;
+        mockERC20.mint(address(this), testAmount);
+        mockERC20.approve(address(myDanDefi), testAmount);
+        uint256 tokenId = myDanDefi.claimPass(myDanDefi.genesisReferralCode());
+        uint256 validDuration = myDanDefi.depositDurations(0);
+        myDanDefi.deposit(tokenId, testAmount, validDuration);
+        uint256 expectedStartTime = block.timestamp;
+        vm.warp(block.timestamp + validDuration / 3);
+        uint256[] memory depositIds = new uint256[](1);
+        depositIds[0] = 0;
+        myDanDefi.claimInterests(tokenId, depositIds);
+        uint256 expectedInterestClaimed = (((testAmount * 700) / 10000) * 90) / 365 / 3;
+        uint256 totalExpectedInterest = (((testAmount * 700) / 10000) * 90) / 365;
+        assertEq(expectedInterestClaimed, mockERC20.balanceOf(address(this)));
+        vm.warp(block.timestamp + validDuration / 3);
+        myDanDefi.claimInterests(tokenId, depositIds);
+        assertEq(expectedInterestClaimed * 2, mockERC20.balanceOf(address(this)));
+        vm.warp(block.timestamp + validDuration / 3 + 100);
+        myDanDefi.claimInterests(tokenId, depositIds);
+        assertEq(totalExpectedInterest, mockERC20.balanceOf(address(this)));
+        vm.warp(block.timestamp + validDuration / 3);
+        uint256 received = myDanDefi.claimInterests(tokenId, depositIds);
+        assertEq(0, received);
+        assertEq(totalExpectedInterest, mockERC20.balanceOf(address(this)));
+    }
 }
