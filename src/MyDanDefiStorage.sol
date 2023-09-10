@@ -11,6 +11,7 @@ interface IMyDanDefi {
     event ReferralRewardCreated(uint256 referrerTokenId, uint256 rewardId);
     event DepositCreated(uint256 tokenId, uint256 depositId, uint256 amount, uint256 duration, uint256 interestRate, uint256 interestReceivable);
     event MembershipTierChanged(uint256 tokenId, uint256 membershipTierIndex);
+    event InterestClaimed(uint256 tokenId, uint256 depositId, uint256 interestCollectible);
     struct MembershipTier {
         string name;
         uint256 lowerThreshold;
@@ -26,6 +27,7 @@ interface IMyDanDefi {
         uint256 interestRate;
         uint256 interestReceivable;
         uint256 interestCollected;
+        uint256 lastClaimedAt;
     }
     struct ReferralReward {
         uint256 referralLevel;
@@ -65,9 +67,9 @@ interface IMyDanDefi {
     function claimPass(string memory referralCode) external returns (uint256);
 
     function setReferralCode(string memory referralCode, uint256 tokenId) external;
-    // function deposit(uint256 tokenId, uint256 amount, uint256 duration) external;
+
+    function claimInterests(uint256 tokenId, uint256[] calldata depositIds) external; // function deposit(uint256 tokenId, uint256 amount, uint256 duration) external;
     // function withdraw(uint256 tokenId, uint256[] memory depositIds) external;
-    // function claimRewards(uint256 tokenId, uint256[] memory depositIds) external;
     // function claimReferralBonus(uint256 tokenId, uint256[] memory bonusIds) external;
 }
 

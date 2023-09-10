@@ -3,8 +3,6 @@ import "./MyDanDefiStorage.sol";
 import "./utils/LowerCaseConverter.sol";
 import "./IERC20Expanded.sol";
 
-import "forge-std/Test.sol";
-
 contract MyDanDefi is Ownable, MyDanDefiStorage {
     string public constant genesisReferralCode = "mydandefi";
     uint256 public constant genesisTokenId = 0;
@@ -138,6 +136,36 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
         IERC20Expanded(targetToken).transferFrom(msg.sender, address(this), amount);
     }
 
+    function claimInterests(uint256 tokenId, uint256[] calldata depositIds) external {
+        if (!profiles[tokenId].isInitialised) {
+            revert InvalidArgument(tokenId, "Token Id does not exist");
+        }
+        address receiver = myDanPass.ownerOf(tokenId);
+        uint256 totalInterest = 0;
+        for (uint256 i = 0; i < depositIds.length; i++) {
+            Deposit memory deposit = deposits[tokenId][depositIds[i]];
+            if (deposit.interestCollected == deposit.interestReceivable) {
+                continue;
+            }
+            uint256 durationPassed = block.timestamp - max(deposit.lastClaimedAt, deposit.startTime);
+            // TODO: check dust precision
+            uint256 interestCollectible = (deposit.interestReceivable * durationPassed) / (deposit.maturity - deposit.startTime);
+            assert(interestCollectible + deposit.interestCollected <= deposit.interestReceivable);
+            deposits[tokenId][depositIds[i]].interestCollected = deposit.interestCollected + interestCollectible;
+            deposits[tokenId][depositIds[i]].lastClaimedAt = block.timestamp;
+            emit InterestClaimed(tokenId, depositIds[i], interestCollectible);
+            totalInterest += interestCollectible;
+        }
+        IERC20Expanded(targetToken).transfer(receiver, totalInterest);
+    }
+
+    function max(uint256 a, uint256 b) internal pure returns (uint256) {
+        if (a > b) {
+            return a;
+        }
+        return b;
+    }
+
     // INTERNAL FUNCTIONS
     function handleMembershipTierChange(uint256 tokenId, MembershipTierChange memory tierChange) internal {
         if (tierChange.oldTier == tierChange.newTier) {
@@ -182,7 +210,6 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
         uint256 interestRate = membershipTierInterestRate + durationBonusRates[duration];
         // TODO: review dust effects
         uint256 interestReceivable = (amount * interestRate * duration) / 365 days / 10000;
-
         uint256 depositId = nextDepositId;
         nextDepositId += 1;
         deposits[tokenId][depositId] = Deposit({
@@ -191,7 +218,8 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
             maturity: block.timestamp + duration,
             interestRate: interestRate,
             interestReceivable: interestReceivable,
-            interestCollected: 0
+            interestCollected: 0,
+            lastClaimedAt: 0
         });
         depositList[tokenId].push(depositId);
         emit DepositCreated(tokenId, depositId, amount, duration, interestRate, interestReceivable);

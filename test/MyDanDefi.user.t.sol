@@ -215,13 +215,17 @@ contract MyDanDefiTest is Test {
         assertEq(depositSum, testAmount);
         assertEq(membershipTier, 0);
         {
-            (uint256 principal, uint256 startTime, uint256 maturity, uint256 interestRate, uint256 interestReceivable, uint256 interestCollected) = myDanDefi.deposits(tokenId, 0);
+            (uint256 principal, uint256 startTime, uint256 maturity, uint256 interestRate, uint256 interestReceivable, uint256 interestCollected, uint256 lastClaimedAt) = myDanDefi.deposits(
+                tokenId,
+                0
+            );
             assertEq(principal, testAmount);
             assertEq(startTime, block.timestamp);
             assertEq(maturity, block.timestamp + validDuration);
             assertEq(interestRate, 0);
             assertEq(interestReceivable, 0);
             assertEq(interestCollected, 0);
+            assertEq(lastClaimedAt, 0);
         }
         {
             (uint256 referralLevel, uint256 referralStartTime, uint256 referralMaturity, uint256 rewardReceivable, uint256 rewardClaimed, uint256 lastClaimedAt, uint256 depositId) = myDanDefi
@@ -247,7 +251,7 @@ contract MyDanDefiTest is Test {
         assertEq(membershipTierIndex, 1);
         (, , , uint256 tierInterestRate, uint256 referralBonusCollectibleLevelLowerBound, uint256 referralBonusCollectibleLevelUpperBound) = myDanDefi.membershipTiers(membershipTierIndex);
         {
-            (uint256 principal, uint256 startTime, uint256 maturity, uint256 interestRate, uint256 interestReceivable, uint256 interestCollected) = myDanDefi.deposits(tokenId, 0);
+            (uint256 principal, uint256 startTime, uint256 maturity, uint256 interestRate, uint256 interestReceivable, uint256 interestCollected, ) = myDanDefi.deposits(tokenId, 0);
             assertEq(principal, testAmount);
             assertEq(startTime, block.timestamp);
             assertEq(maturity, block.timestamp + validDuration);
@@ -286,13 +290,17 @@ contract MyDanDefiTest is Test {
         assertEq(membershipTierIndex, 3);
         (, , , uint256 tierInterestRate, , uint256 referralBonusCollectibleLevelUpperBound) = myDanDefi.membershipTiers(membershipTierIndex);
         {
-            (uint256 principal, uint256 startTime, uint256 maturity, uint256 interestRate, uint256 interestReceivable, uint256 interestCollected) = myDanDefi.deposits(tokenId, 0);
+            (uint256 principal, uint256 startTime, uint256 maturity, uint256 interestRate, uint256 interestReceivable, uint256 interestCollected, uint256 lastClaimedAt) = myDanDefi.deposits(
+                tokenId,
+                0
+            );
             assertEq(principal, testAmount);
             assertEq(startTime, block.timestamp);
             assertEq(maturity, block.timestamp + validDuration);
             assertEq(interestRate, tierInterestRate);
             assertEq(interestReceivable, (((principal * tierInterestRate) / 10000) * validDuration) / 365 days);
             assertEq(interestCollected, 0);
+            assertEq(lastClaimedAt, 0);
         }
         {
             for (uint256 referralLevel = 1; referralLevel <= referralBonusCollectibleLevelUpperBound; referralLevel++) {
@@ -316,7 +324,7 @@ contract MyDanDefiTest is Test {
         (, , , uint256 membershipTierIndex, ) = myDanDefi.profiles(tokenId);
         (, , , uint256 tierInterestRate, , ) = myDanDefi.membershipTiers(membershipTierIndex);
         {
-            (uint256 principal, , , uint256 interestRate, uint256 interestReceivable, ) = myDanDefi.deposits(tokenId, 0);
+            (uint256 principal, , , uint256 interestRate, uint256 interestReceivable, , ) = myDanDefi.deposits(tokenId, 0);
             uint256 totalInterestRate = tierInterestRate + durationBonus;
             assertEq(interestRate, totalInterestRate);
             assertEq(interestReceivable, (((principal * totalInterestRate) / 10000) * validDuration) / 365 days);
@@ -344,5 +352,29 @@ contract MyDanDefiTest is Test {
             emit ReferralRewardCreated(referralBonusMaxLevel - (i + 1), i);
         }
         myDanDefi.deposit(tokenId, testAmount, validDuration);
+    }
+
+    function testClaimInterests() external Setup {
+        uint256 testAmount = oneDollar * 100;
+        mockERC20.mint(address(this), testAmount);
+        mockERC20.approve(address(myDanDefi), testAmount);
+        uint256 tokenId = myDanDefi.claimPass(myDanDefi.genesisReferralCode());
+        uint256 validDuration = myDanDefi.depositDurations(0);
+        myDanDefi.deposit(tokenId, testAmount, validDuration);
+        uint256 expectedStartTime = block.timestamp;
+        vm.warp(block.timestamp + validDuration / 3);
+        uint256[] memory depositIds = new uint256[](1);
+        depositIds[0] = 0;
+        myDanDefi.claimInterests(tokenId, depositIds);
+        uint256 expectedInterestClaimed = (((testAmount * 700) / 10000) * 90) / 365 / 3;
+        assertEq(expectedInterestClaimed, mockERC20.balanceOf(address(this)));
+        (uint256 principal, uint256 startTime, uint256 maturity, uint256 interestRate, uint256 interestReceivable, uint256 interestCollected, uint256 lastClaimedAt) = myDanDefi.deposits(tokenId, 0);
+        assertEq(principal, testAmount);
+        assertEq(startTime, expectedStartTime);
+        assertEq(maturity, expectedStartTime + validDuration);
+        assertEq(interestRate, 700);
+        assertEq(interestReceivable, (((principal * interestRate) / 10000) * validDuration) / 365 days);
+        assertEq(interestCollected, expectedInterestClaimed);
+        assertEq(lastClaimedAt, block.timestamp);
     }
 }
