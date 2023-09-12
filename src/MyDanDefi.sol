@@ -2,7 +2,6 @@ pragma solidity ^0.8.10;
 import "./MyDanDefiStorage.sol";
 import "./utils/LowerCaseConverter.sol";
 import "./IERC20Expanded.sol";
-import "forge-std/Test.sol";
 
 contract MyDanDefi is Ownable, MyDanDefiStorage {
     string public constant genesisReferralCode = "mydandefi";
@@ -133,7 +132,7 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
         emit MembershipTierChanged(tokenId, membershipTierIndex);
         handleMembershipTierChange(tokenId, tierChange);
         uint256 depositId = createDepositObject(tokenId, membershipTier.interestRate, amount, duration);
-        createRewardObjects(profile.referrerTokenId, depositId, amount, duration);
+        createRewardObjects(tokenId, profile.referrerTokenId, depositId, amount, duration);
         IERC20Expanded(targetToken).transferFrom(msg.sender, address(this), amount);
     }
 
@@ -165,6 +164,81 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
         return totalInterest;
     }
 
+    function claimReferralBonus(uint256 tokenId, uint256[] memory bonusIds) external returns (uint256) {
+        if (!profiles[tokenId].isInitialised) {
+            revert InvalidArgument(tokenId, "Token Id does not exist");
+        }
+        address receiver = myDanPass.ownerOf(tokenId);
+        uint256 totalReward = 0;
+        for (uint256 i = 0; i < bonusIds.length; i++) {
+            ReferralReward storage reward = referralRewards[tokenId][bonusIds[i]];
+            if (reward.rewardClaimed == reward.rewardReceivable) {
+                continue;
+            }
+            totalReward += calculateCollectableReward(tokenId, reward, bonusIds[i]);
+        }
+        if (totalReward > 0) {
+            IERC20Expanded(targetToken).transfer(receiver, totalReward);
+        }
+        return totalReward;
+    }
+
+    function calculateCollectableReward(uint256 tokenId, ReferralReward storage reward, uint256 rewardId) internal returns (uint256) {
+        // FIX storage vs memory
+        uint256 totalReward = 0;
+        for (uint256 i = 0; i < tierActivationLogs[tokenId][reward.referralLevel].length; i++) {
+            uint256 activationStart = tierActivationLogs[tokenId][reward.referralLevel][i].start;
+            uint256 activationEnd = tierActivationLogs[tokenId][reward.referralLevel][i].end;
+            if (activationEnd == 0) {
+                // stil activated. use current timestamp
+                activationEnd = block.timestamp;
+            }
+
+            if (activationStart > reward.maturity || activationEnd < reward.startTime || activationEnd < reward.lastClaimedAt) {
+                continue;
+            }
+
+            uint256 applicableDuration = min(block.timestamp, activationEnd, reward.maturity) - max(activationStart, reward.startTime, reward.lastClaimedAt);
+
+            uint256 rewardCollectible = (reward.rewardReceivable * applicableDuration) / (reward.maturity - reward.startTime);
+            if (rewardCollectible + reward.rewardClaimed > reward.rewardReceivable) {
+                rewardCollectible = reward.rewardReceivable - reward.rewardClaimed;
+            }
+            reward.rewardClaimed = reward.rewardClaimed + rewardCollectible;
+            reward.lastClaimedAt = block.timestamp;
+            totalReward += rewardCollectible;
+        }
+        emit ReferralBonusClaimed(tokenId, rewardId, totalReward);
+        return totalReward;
+    }
+
+    // INTERNAL FUNCTIONS
+    function max(uint256 a, uint256 b, uint256 c) internal pure returns (uint256) {
+        if (a > b) {
+            if (a > c) {
+                return a;
+            }
+            return c;
+        }
+        if (b > c) {
+            return b;
+        }
+        return c;
+    }
+
+    function min(uint256 a, uint256 b, uint256 c) internal pure returns (uint256) {
+        if (a < b) {
+            if (a < c) {
+                return a;
+            }
+            return c;
+        }
+        if (b < c) {
+            return b;
+        }
+        return c;
+    }
+
     function max(uint256 a, uint256 b) internal pure returns (uint256) {
         if (a > b) {
             return a;
@@ -172,7 +246,6 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
         return b;
     }
 
-    // INTERNAL FUNCTIONS
     function handleMembershipTierChange(uint256 tokenId, MembershipTierChange memory tierChange) internal {
         if (tierChange.oldTier == tierChange.newTier) {
             return;
@@ -181,16 +254,20 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
             for (uint256 tier = tierChange.oldTier + 1; tier <= tierChange.newTier; tier++) {
                 uint256 lowerBound = membershipTiers[tier].referralBonusCollectibleLevelLowerBound;
                 uint256 upperBound = membershipTiers[tier].referralBonusCollectibleLevelUpperBound;
-                for (uint256 i = lowerBound; i <= upperBound; i++) {
-                    tierActivationLogs[tokenId][i].push(TierActivationLog({start: block.timestamp, end: 0}));
+                for (uint256 referralLevel = lowerBound; referralLevel <= upperBound; referralLevel++) {
+                    tierActivationLogs[tokenId][referralLevel].push(TierActivationLog({start: block.timestamp, end: 0}));
+                    uint256 logIndex = tierActivationLogs[tokenId][referralLevel].length - 1;
+                    emit ReferralBonusLevelCollectionActivated(tokenId, referralLevel, logIndex, block.timestamp);
                 }
             }
         } else {
             for (uint256 tier = tierChange.oldTier; tier >= tierChange.newTier; tier--) {
                 uint256 lowerBound = membershipTiers[tier].referralBonusCollectibleLevelLowerBound;
                 uint256 upperBound = membershipTiers[tier].referralBonusCollectibleLevelUpperBound;
-                for (uint256 i = lowerBound; i <= upperBound; i++) {
-                    tierActivationLogs[tokenId][i][tierActivationLogs[tokenId][i].length - 1].end = block.timestamp;
+                for (uint256 referralLevel = lowerBound; referralLevel <= upperBound; referralLevel++) {
+                    uint256 logIndex = tierActivationLogs[tokenId][referralLevel].length - 1;
+                    tierActivationLogs[tokenId][referralLevel][logIndex].end = block.timestamp;
+                    emit ReferralBonusLevelCollectionDeactivated(tokenId, referralLevel, logIndex, block.timestamp);
                 }
             }
         }
@@ -232,7 +309,10 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
         return depositId;
     }
 
-    function createRewardObjects(uint256 initialReferrerTokenId, uint256 depositId, uint256 amount, uint256 duration) internal {
+    function createRewardObjects(uint256 tokenId, uint256 initialReferrerTokenId, uint256 depositId, uint256 amount, uint256 duration) internal {
+        if (tokenId == genesisTokenId) {
+            return;
+        }
         uint256 referrerTokenId = initialReferrerTokenId;
 
         for (uint256 i = 0; i < referralBonusRewardRates.length; i++) {
@@ -258,7 +338,7 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
             });
             // next iteration
 
-            emit ReferralRewardCreated(referrerTokenId, rewardId);
+            emit ReferralRewardCreated(referrerTokenId, rewardId, referralLevel);
             uint256 nextReferrerTokenId = profiles[referrerTokenId].referrerTokenId;
 
             if (nextReferrerTokenId == referrerTokenId) {
@@ -278,6 +358,4 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
         revert InvalidArgument(depositSum, "No membership tier found");
     }
     // function withdraw(uint256 tokenId, uint256[] memory depositIds[]) external;
-    // function claimRewards(uint256 tokenId, uint256[] memory depositIds[]) external;
-    // function claimReferralBonus(uint256 tokenId, uint256[] memory bonusIds)
 }

@@ -18,7 +18,7 @@ contract MyDanDefiTest is Test {
     MockERC20 mockERC20 = new MockERC20();
     uint256 oneDollar = 10 ** mockERC20.decimals();
     uint256 referralBonusMaxLevel;
-    event ReferralRewardCreated(uint256 referrerTokenId, uint256 rewardId);
+    event ReferralRewardCreated(uint256 referrerTokenId, uint256 rewardId, uint256 referralLevel);
 
     constructor() {}
 
@@ -349,7 +349,7 @@ contract MyDanDefiTest is Test {
 
         for (uint256 i = 0; i < referralBonusMaxLevel; i++) {
             vm.expectEmit(false, false, false, true);
-            emit ReferralRewardCreated(referralBonusMaxLevel - (i + 1), i);
+            emit ReferralRewardCreated(referralBonusMaxLevel - (i + 1), i, i + 1);
         }
         myDanDefi.deposit(tokenId, testAmount, validDuration);
     }
@@ -403,5 +403,72 @@ contract MyDanDefiTest is Test {
         uint256 received = myDanDefi.claimInterests(tokenId, depositIds);
         assertEq(0, received);
         assertEq(totalExpectedInterest, mockERC20.balanceOf(address(this)));
+    }
+
+    function testClaimReferralBonusWhenReferralHasNoDeposit() external Setup {
+        uint256 testAmount = oneDollar * 100_000_000;
+        mockERC20.mint(address(this), testAmount);
+        mockERC20.approve(address(myDanDefi), testAmount);
+        uint256 tokenId = myDanDefi.claimPass(myDanDefi.genesisReferralCode());
+        uint256 validDuration = myDanDefi.depositDurations(0);
+        myDanDefi.deposit(tokenId, testAmount, validDuration);
+
+        uint256 expectedTotalReward = (((testAmount * 600) / 10000) * validDuration) / 365 days;
+        vm.warp(block.timestamp + validDuration / 2);
+        uint256[] memory bonusIds = new uint256[](1);
+        bonusIds[0] = 0;
+        uint256 received = myDanDefi.claimReferralBonus(myDanDefi.genesisTokenId(), bonusIds);
+        // should receive zero because genesis hasnt deposited
+        assertEq(0, received);
+    }
+
+    function testClaimReferralBonusWithActivationBeforeRewardCreation() external Setup {
+        uint256 testAmount = oneDollar * 100_000_000;
+        mockERC20.mint(address(this), testAmount * 2);
+        mockERC20.approve(address(myDanDefi), testAmount * 2);
+        uint256 tokenId = myDanDefi.claimPass(myDanDefi.genesisReferralCode());
+        uint256 validDuration = myDanDefi.depositDurations(0);
+        myDanDefi.deposit(myDanDefi.genesisTokenId(), testAmount, validDuration);
+        myDanDefi.deposit(tokenId, testAmount, validDuration);
+
+        uint256 expectedTotalReward = (((testAmount * 600) / 10000) * validDuration) / 365 days;
+        vm.warp(block.timestamp + validDuration / 2);
+        uint256[] memory bonusIds = new uint256[](1);
+        bonusIds[0] = 0;
+        uint256 received = myDanDefi.claimReferralBonus(myDanDefi.genesisTokenId(), bonusIds);
+        assertEq(expectedTotalReward / 2, received);
+        // claim again
+        vm.warp(block.timestamp + validDuration / 2 + 100);
+        received = myDanDefi.claimReferralBonus(myDanDefi.genesisTokenId(), bonusIds);
+        assertEq(expectedTotalReward / 2, received);
+        assertEq(mockERC20.balanceOf(address(this)), expectedTotalReward);
+    }
+
+    function testClaimReferralBonusWithActivationLaterThanRewardCreation() external Setup {
+        uint256 testAmount = oneDollar * 100_000_000;
+        mockERC20.mint(address(this), testAmount * 2);
+        mockERC20.approve(address(myDanDefi), testAmount * 2);
+        uint256 tokenId = myDanDefi.claimPass(myDanDefi.genesisReferralCode());
+        uint256 validDuration = myDanDefi.depositDurations(0);
+        myDanDefi.deposit(tokenId, testAmount, validDuration);
+
+        uint256 expectedTotalReward = (((testAmount * 600) / 10000) * validDuration) / 365 days;
+        vm.warp(block.timestamp + validDuration / 2);
+        // deposit after 1/2 duration has passed and activate
+        myDanDefi.deposit(myDanDefi.genesisTokenId(), testAmount, validDuration);
+        vm.warp(block.timestamp + validDuration / 2);
+        // claim after another 1/2 duration has passed. only receive half
+        uint256[] memory bonusIds = new uint256[](1);
+        bonusIds[0] = 0;
+        uint256 received = myDanDefi.claimReferralBonus(myDanDefi.genesisTokenId(), bonusIds);
+        assertEq(expectedTotalReward / 2, received);
+        assertEq(mockERC20.balanceOf(address(this)), expectedTotalReward / 2);
+    }
+
+    function testClaimReferralBonusWithDeactivation() external Setup {
+        // TODO: impl after withdraw is implemented
+        // activate - deposit - deactivate - claim
+        // activate - deposit - deactivate - activate - claim
+        // deposit - activate - deactivate - claim
     }
 }

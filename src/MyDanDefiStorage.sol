@@ -8,10 +8,14 @@ interface IMyDanDefi {
     event DurationBonusRateUpdated(uint256 duration, uint256 newRate);
     event PassMinted(address minter, uint256 mintedTokenId, uint256 referrerTokenId);
     event ReferralCodeCreated(string referralCode, uint256 tokenId);
-    event ReferralRewardCreated(uint256 referrerTokenId, uint256 rewardId);
+    event ReferralRewardCreated(uint256 referrerTokenId, uint256 rewardId, uint256 referralLevel);
     event DepositCreated(uint256 tokenId, uint256 depositId, uint256 amount, uint256 duration, uint256 interestRate, uint256 interestReceivable);
     event MembershipTierChanged(uint256 tokenId, uint256 membershipTierIndex);
     event InterestClaimed(uint256 tokenId, uint256 depositId, uint256 interestCollectible);
+
+    event ReferralBonusClaimed(uint256 tokenId, uint256 rewardId, uint256 rewardCollectible);
+    event ReferralBonusLevelCollectionActivated(uint256 tokenId, uint256 referralLevel, uint256 logIndex, uint256 timestamp);
+    event ReferralBonusLevelCollectionDeactivated(uint256 tokenId, uint256 referralLevel, uint256 logIndex, uint256 timestamp);
     struct MembershipTier {
         string name;
         uint256 lowerThreshold;
