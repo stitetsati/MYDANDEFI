@@ -422,7 +422,7 @@ contract MyDanDefiTest is Test {
         assertEq(0, received);
     }
 
-    function testClaimReferralBonusWhenReferralHasDeposit() external Setup {
+    function testClaimReferralBonusWithActivationBeforeRewardCreation() external Setup {
         uint256 testAmount = oneDollar * 100_000_000;
         mockERC20.mint(address(this), testAmount * 2);
         mockERC20.approve(address(myDanDefi), testAmount * 2);
@@ -463,5 +463,12 @@ contract MyDanDefiTest is Test {
         uint256 received = myDanDefi.claimReferralBonus(myDanDefi.genesisTokenId(), bonusIds);
         assertEq(expectedTotalReward / 2, received);
         assertEq(mockERC20.balanceOf(address(this)), expectedTotalReward / 2);
+    }
+
+    function testClaimReferralBonusWithDeactivation() external Setup {
+        // TODO: impl after withdraw is implemented
+        // activate - deposit - deactivate - claim
+        // activate - deposit - deactivate - activate - claim
+        // deposit - activate - deactivate - claim
     }
 }
