@@ -16,6 +16,7 @@ interface IMyDanDefi {
     event ReferralBonusClaimed(uint256 tokenId, uint256 rewardId, uint256 rewardCollectible);
     event ReferralBonusLevelCollectionActivated(uint256 tokenId, uint256 referralLevel, uint256 logIndex, uint256 timestamp);
     event ReferralBonusLevelCollectionDeactivated(uint256 tokenId, uint256 referralLevel, uint256 logIndex, uint256 timestamp);
+    event DepositWithdrawn(uint256 tokenId, uint256 depositId, uint256 principal);
     struct MembershipTier {
         string name;
         uint256 lowerThreshold;
@@ -74,7 +75,7 @@ interface IMyDanDefi {
 
     function claimInterests(uint256 tokenId, uint256[] calldata depositIds) external returns (uint256);
 
-    function deposit(uint256 tokenId, uint256 amount, uint256 duration) external;
+    function deposit(uint256 tokenId, uint256 amount, uint256 duration) external returns (uint256);
     // function withdraw(uint256 tokenId, uint256[] memory depositIds) external;
     // function claimReferralBonus(uint256 tokenId, uint256[] memory bonusIds) external;
 }

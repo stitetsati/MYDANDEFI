@@ -19,6 +19,7 @@ contract MyDanDefiTest is Test {
     uint256 oneDollar = 10 ** mockERC20.decimals();
     uint256 referralBonusMaxLevel;
     event ReferralRewardCreated(uint256 referrerTokenId, uint256 rewardId, uint256 referralLevel);
+    event ReferralBonusLevelCollectionDeactivated(uint256 tokenId, uint256 referralLevel, uint256 logIndex, uint256 timestamp);
 
     constructor() {}
 
@@ -466,9 +467,152 @@ contract MyDanDefiTest is Test {
     }
 
     function testClaimReferralBonusWithDeactivation() external Setup {
-        // TODO: impl after withdraw is implemented
-        // activate - deposit - deactivate - claim
-        // activate - deposit - deactivate - activate - claim
-        // deposit - activate - deactivate - claim
+        uint256 testAmount = oneDollar * 100_000_000;
+        mockERC20.mint(address(this), testAmount * 3);
+        mockERC20.approve(address(myDanDefi), type(uint256).max);
+        uint256 genesisTokenId = myDanDefi.genesisTokenId();
+        uint256 tokenId = myDanDefi.claimPass(myDanDefi.genesisReferralCode());
+        uint256 oneYear = 365 days;
+        uint256 depositId = myDanDefi.deposit(tokenId, testAmount, oneYear);
+        vm.warp(block.timestamp + 30 days);
+        // activate for 180 days
+        depositId = myDanDefi.deposit(genesisTokenId, testAmount, 180 days);
+        vm.warp(block.timestamp + 180 days);
+        uint256[] memory depositIds = new uint256[](1);
+        depositIds[0] = depositId;
+        myDanDefi.withdraw(genesisTokenId, depositIds);
+        // deactivate for 30 days
+        vm.warp(block.timestamp + 30 days);
+        depositId = myDanDefi.deposit(genesisTokenId, testAmount, 90 days);
+        // activate for 100 days (depsite being matured)
+        vm.warp(block.timestamp + 100 days);
+        depositIds[0] = depositId;
+        uint256 withdrawnAmount = myDanDefi.withdraw(genesisTokenId, depositIds);
+        uint256 expectedWithdrawnAmount = (((testAmount * 800) / 10000) * 90) / 365 + testAmount;
+        assertEq(withdrawnAmount, expectedWithdrawnAmount);
+        // total activation days = 90 + 100 = 190
+        uint256 totalReward = (testAmount * 600) / 10000;
+        // this takes into the 10 extra days becoz the user hasnt been downgraded due to withdrawal.
+        uint256 expectedReferralReward = (totalReward * 280) / 365;
+        uint256[] memory rewardIds = new uint256[](1);
+        rewardIds[0] = 0;
+        myDanDefi.claimReferralBonus(genesisTokenId, rewardIds);
+        {
+            (
+                uint256 referralLevel,
+                uint256 referralStartTime,
+                uint256 referralMaturity,
+                uint256 rewardReceivable,
+                uint256 rewardClaimed,
+                uint256 lastClaimedAt,
+                uint256 contributorDepositId
+            ) = myDanDefi.referralRewards(0, 0);
+            assertEq(referralLevel, 1);
+            assertEq(rewardReceivable, totalReward);
+            assertEq(rewardClaimed, expectedReferralReward);
+            assertEq(lastClaimedAt, block.timestamp);
+            assertEq(contributorDepositId, 0);
+        }
+    }
+
+    function testWithdraw() external Setup {
+        uint256 testAmount = oneDollar * 100_000_000;
+        mockERC20.mint(address(this), testAmount);
+        mockERC20.approve(address(myDanDefi), testAmount);
+        uint256 tokenId = myDanDefi.claimPass(myDanDefi.genesisReferralCode());
+        uint256 duration = 365 days;
+        uint256 depositId = myDanDefi.deposit(tokenId, testAmount, duration);
+        vm.warp(block.timestamp + duration);
+        uint256[] memory depositIds = new uint256[](1);
+        depositIds[0] = depositId;
+        // airdrop for liquidity management
+        uint256 aumBeforeWithdrawal = myDanDefi.currentAUM();
+        mockERC20.mint(address(myDanDefi), testAmount);
+        uint256 deactivationTime = block.timestamp;
+        // expect events
+        for (uint256 referralLevel = 0; referralLevel < referralBonusMaxLevel; referralLevel++) {
+            vm.expectEmit(false, false, false, true);
+            emit ReferralBonusLevelCollectionDeactivated(tokenId, referralLevel + 1, 0, deactivationTime);
+        }
+        uint256 withdrawnAmount = myDanDefi.withdraw(tokenId, depositIds);
+        // expect aum decrease
+        uint256 expectedWithdrawnAmount = (testAmount * 850) / 10000 + testAmount;
+        assertEq(withdrawnAmount, expectedWithdrawnAmount);
+        assertEq(mockERC20.balanceOf(address(this)), expectedWithdrawnAmount);
+        uint256 aumAfterWithdrawal = myDanDefi.currentAUM();
+        assertEq(aumAfterWithdrawal, aumBeforeWithdrawal - testAmount);
+        // expect profile depositSum/ vip tier change
+        (, , uint256 depositSum, uint256 membershipTier, ) = myDanDefi.profiles(tokenId);
+        assertEq(depositSum, 0);
+        assertEq(membershipTier, 0);
+        // withdraw again should revert
+
+        vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, depositId, "Deposit does not exist"));
+        myDanDefi.withdraw(tokenId, depositIds);
+    }
+
+    function testWithdrawAfterHalfInterestHasBeenClaimed() external Setup {
+        uint256 testAmount = oneDollar * 100_000_000;
+        // airdrop for liquidity management
+        mockERC20.mint(address(myDanDefi), testAmount);
+        uint256 tokenId = myDanDefi.claimPass(myDanDefi.genesisReferralCode());
+        mockERC20.mint(address(this), testAmount);
+        mockERC20.approve(address(myDanDefi), testAmount);
+
+        uint256 duration = 365 days;
+        uint256 depositId = myDanDefi.deposit(tokenId, testAmount, duration);
+        vm.warp(block.timestamp + duration / 2);
+        uint256[] memory depositIds = new uint256[](1);
+        depositIds[0] = depositId;
+        uint256 interestsClaimed = myDanDefi.claimInterests(tokenId, depositIds);
+        // check half interest claimed
+        uint256 expectedHalfInterests = ((((testAmount * 850) / 10000) * duration) / 2) / 365 days;
+        assertEq(interestsClaimed, expectedHalfInterests);
+        assertEq(mockERC20.balanceOf(address(this)), interestsClaimed);
+        vm.warp(block.timestamp + duration / 2);
+        interestsClaimed = myDanDefi.claimInterests(tokenId, depositIds);
+        assertEq(interestsClaimed, expectedHalfInterests);
+        assertEq(mockERC20.balanceOf(address(this)), expectedHalfInterests * 2);
+        uint256 withdrawnAmount = myDanDefi.withdraw(tokenId, depositIds);
+        assertEq(withdrawnAmount, testAmount);
+        assertEq(mockERC20.balanceOf(address(this)), expectedHalfInterests * 2 + testAmount);
+    }
+
+    function testWithdrawBeforeMaturity() external Setup {
+        uint256 testAmount = oneDollar * 100_000_000;
+        mockERC20.mint(address(this), testAmount);
+        mockERC20.approve(address(myDanDefi), testAmount);
+        uint256 tokenId = myDanDefi.claimPass(myDanDefi.genesisReferralCode());
+        uint256 duration = 365 days;
+        uint256 maturity = block.timestamp + duration;
+        uint256 depositId = myDanDefi.deposit(tokenId, testAmount, duration);
+        vm.warp(block.timestamp + duration - 1);
+        uint256[] memory depositIds = new uint256[](1);
+        depositIds[0] = depositId;
+        // airdrop for liquidity management
+        mockERC20.mint(address(myDanDefi), testAmount);
+        vm.expectRevert(abi.encodeWithSelector(NotWithdrawable.selector, tokenId, depositId, maturity));
+        myDanDefi.withdraw(tokenId, depositIds);
+    }
+
+    function testWithdrawOnBehalf() external Setup {
+        uint256 testAmount = oneDollar * 100_000_000;
+        mockERC20.mint(address(this), testAmount);
+        mockERC20.approve(address(myDanDefi), testAmount);
+        uint256 tokenId = myDanDefi.claimPass(myDanDefi.genesisReferralCode());
+        uint256 duration = 365 days;
+        uint256 depositId = myDanDefi.deposit(tokenId, testAmount, duration);
+        vm.warp(block.timestamp + duration);
+        uint256[] memory depositIds = new uint256[](1);
+        depositIds[0] = depositId;
+        // airdrop for liquidity management
+        mockERC20.mint(address(myDanDefi), testAmount);
+        vm.prank(deadAddress);
+        uint256 withdrawnAmount = myDanDefi.withdraw(tokenId, depositIds);
+        uint256 expectedWithdrawnAmount = (testAmount * 850) / 10000 + testAmount;
+        // nft owner gets the token, not the triggerer
+        assertEq(withdrawnAmount, expectedWithdrawnAmount);
+        assertEq(mockERC20.balanceOf(address(this)), expectedWithdrawnAmount);
+        assertEq(mockERC20.balanceOf(deadAddress), 0);
     }
 }
