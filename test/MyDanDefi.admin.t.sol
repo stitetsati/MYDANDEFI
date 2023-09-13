@@ -144,17 +144,19 @@ contract MyDanDefiTest is Test {
         assertEq(interestRate, 1000);
     }
 
-    function testSetReferralBonusRewardRates() external {
-        uint256[] memory rates = new uint256[](2);
-        rates[0] = 100;
-        rates[1] = 200;
-        myDanDefi.setReferralBonusRewardRates(rates);
-        assertEq(myDanDefi.referralBonusRewardRates(0), 100);
-        assertEq(myDanDefi.referralBonusRewardRates(1), 200);
-        // test zero value
-        rates[1] = 0;
-        vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, rates[1], "Rate cannot be zero"));
-        myDanDefi.setReferralBonusRewardRates(rates);
+    function testSetReferralBonusRates() external {
+        uint256[] memory rates = new uint256[](3);
+        rates[0] = 0;
+        rates[1] = 100;
+        rates[2] = 200;
+        myDanDefi.setReferralBonusRates(rates);
+        assertEq(myDanDefi.referralBonusRates(0), 0);
+        assertEq(myDanDefi.referralBonusRates(1), 100);
+        assertEq(myDanDefi.referralBonusRates(2), 200);
+        // test not zero value
+        rates[0] = 10;
+        vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, rates[0], "First rate must be zero"));
+        myDanDefi.setReferralBonusRates(rates);
     }
 
     function testFetch() external {

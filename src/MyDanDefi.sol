@@ -1,11 +1,11 @@
 pragma solidity ^0.8.10;
+import "openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "./MyDanDefiStorage.sol";
 import "./utils/LowerCaseConverter.sol";
+import "./utils/MyDanDefiUtility.sol";
 import "./IERC20Expanded.sol";
 
-import "forge-std/Test.sol";
-
-contract MyDanDefi is Ownable, MyDanDefiStorage {
+contract MyDanDefi is MyDanDefiUtility, Ownable, ReentrancyGuard, MyDanDefiStorage {
     string public constant genesisReferralCode = "mydandefi";
     uint256 public constant genesisTokenId = 0;
     using LowerCaseConverter for string;
@@ -21,8 +21,16 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
         profiles[tokenId] = Profile({referrerTokenId: tokenId, referralCode: genesisReferralCode, depositSum: 0, membershipTier: 0, isInitialised: true});
     }
 
+    /**********************************/
+    /**********************************/
+    /*****                       ******/
+    /*****    ADMIN FUNCTIONS    ******/
+    /*****                       ******/
+    /**********************************/
+    /**********************************/
+
     function fetch(address token, uint256 amount) external onlyOwner {
-        IERC20Expanded(token).transfer(msg.sender, amount);
+        sendToken(token, msg.sender, amount);
     }
 
     function setAssetsUnderManagementCap(uint256 newCap) external onlyOwner {
@@ -34,6 +42,7 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
     }
 
     function editMembershipTier(uint256 i, MembershipTier calldata updatedMembershipTier) external onlyOwner {
+        // TODO: check reward calc impact
         if (updatedMembershipTier.interestRate == 0) {
             revert InvalidArgument(updatedMembershipTier.interestRate, "Rate cannot be zero");
         }
@@ -68,18 +77,23 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
         }
     }
 
-    function setReferralBonusRewardRates(uint256[] calldata rates) external onlyOwner {
-        for (uint256 i = 0; i < rates.length; i++) {
-            if (rates[i] == 0) {
-                revert InvalidArgument(rates[i], "Rate cannot be zero");
-            }
+    function setReferralBonusRates(uint256[] calldata rates) external onlyOwner {
+        if (rates[0] != 0) {
+            revert InvalidArgument(rates[0], "First rate must be zero");
         }
-        delete referralBonusRewardRates;
-        referralBonusRewardRates = rates;
+        delete referralBonusRates;
+        referralBonusRates = rates;
     }
 
-    // USER FUNCTIONS
-    function claimPass(string memory referralCode) external returns (uint256) {
+    /**********************************/
+    /**********************************/
+    /*****                       ******/
+    /*****     USER FUNCTIONS    ******/
+    /*****                       ******/
+    /**********************************/
+    /**********************************/
+
+    function claimPass(string memory referralCode) external nonReentrant returns (uint256) {
         string memory lowerCaseReferralCode = referralCode.toLowerCase();
         uint256 referrerTokenId = genesisTokenId;
         if (keccak256(abi.encodePacked(lowerCaseReferralCode)) != keccak256(abi.encodePacked(genesisReferralCode))) {
@@ -114,7 +128,7 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
         emit ReferralCodeCreated(lowerCaseReferralCode, tokenId);
     }
 
-    function deposit(uint256 tokenId, uint256 amount, uint256 duration) external returns (uint256) {
+    function deposit(uint256 tokenId, uint256 amount, uint256 duration) external nonReentrant returns (uint256) {
         if (amount < 10 ** IERC20Expanded(targetToken).decimals()) {
             revert InvalidArgument(amount, "Amount must be at least 1");
         }
@@ -129,24 +143,30 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
         }
         currentAUM += amount;
         Profile storage profile = profiles[tokenId];
-        (uint256 membershipTierIndex, MembershipTier memory membershipTier) = getMembershipTier(profile.depositSum + amount);
-        MembershipTierChange memory tierChange = updateProfileMembershipTierAfterDeposit(profile, membershipTierIndex, profile.depositSum + amount);
-        emit MembershipTierChanged(tokenId, membershipTierIndex);
-        handleMembershipTierChange(tokenId, tierChange);
-        uint256 depositId = createDepositObject(tokenId, membershipTier.interestRate, amount, duration);
-        createRewardObjects(tokenId, profile.referrerTokenId, depositId, amount, duration);
+        (uint256 newMembershipTierIndex, uint256 tierInterestRate) = getMembershipTierInterestByDeposit(profile.depositSum + amount);
+
+        handleMembershipTierUpdate(tokenId, profile, newMembershipTierIndex, profile.depositSum + amount);
+        uint256 depositId = createDepositObject(tokenId, tierInterestRate, amount, duration);
+        createReferralBonusObjects(tokenId, profile.referrerTokenId, depositId, amount, duration);
         IERC20Expanded(targetToken).transferFrom(msg.sender, address(this), amount);
         return depositId;
     }
 
-    function withdraw(uint256 tokenId, uint256[] calldata depositIds) external returns (uint256) {
+    function collectInterests(uint256 tokenId, uint256[] calldata depositIds) external nonReentrant returns (uint256) {
+        if (!profiles[tokenId].isInitialised) {
+            revert InvalidArgument(tokenId, "Token Id does not exist");
+        }
+        return _collectInterests(tokenId, depositIds);
+    }
+
+    function withdraw(uint256 tokenId, uint256[] calldata depositIds) external nonReentrant returns (uint256) {
         if (!profiles[tokenId].isInitialised) {
             revert InvalidArgument(tokenId, "Token Id does not exist");
         }
 
-        uint256 interestClaimed = claimInterests(tokenId, depositIds);
+        uint256 interestClaimed = _collectInterests(tokenId, depositIds);
         address receiver = myDanPass.ownerOf(tokenId);
-        uint256 totalAmount = 0;
+        uint256 withdrawnPrincipal = 0;
 
         for (uint256 i = 0; i < depositIds.length; i++) {
             Deposit memory deposit = deposits[tokenId][depositIds[i]];
@@ -156,79 +176,97 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
             if (deposit.maturity > block.timestamp) {
                 revert NotWithdrawable(tokenId, depositIds[i], deposit.maturity);
             }
-            totalAmount += deposit.principal;
+            withdrawnPrincipal += deposit.principal;
             emit DepositWithdrawn(tokenId, depositIds[i], deposit.principal);
             delete deposits[tokenId][depositIds[i]];
         }
-        if (totalAmount == 0) {
-            return totalAmount;
+        if (withdrawnPrincipal == 0) {
+            return withdrawnPrincipal;
         }
-        currentAUM -= totalAmount;
+        currentAUM -= withdrawnPrincipal;
         Profile storage profile = profiles[tokenId];
-        (uint256 membershipTierIndex, ) = getMembershipTier(profile.depositSum - totalAmount);
-        MembershipTierChange memory tierChange = updateProfileMembershipTierAfterDeposit(profile, membershipTierIndex, profile.depositSum - totalAmount);
-        emit MembershipTierChanged(tokenId, membershipTierIndex);
-        handleMembershipTierChange(tokenId, tierChange);
-        sendToken(receiver, totalAmount);
-        return totalAmount + interestClaimed;
+        (uint256 newMembershipTierIndex, ) = getMembershipTierInterestByDeposit(profile.depositSum - withdrawnPrincipal);
+        handleMembershipTierUpdate(tokenId, profile, newMembershipTierIndex, profile.depositSum - withdrawnPrincipal);
+        sendToken(targetToken, receiver, withdrawnPrincipal);
+        return withdrawnPrincipal + interestClaimed;
     }
 
-    function claimInterests(uint256 tokenId, uint256[] calldata depositIds) public returns (uint256) {
-        if (!profiles[tokenId].isInitialised) {
-            revert InvalidArgument(tokenId, "Token Id does not exist");
-        }
-        address receiver = myDanPass.ownerOf(tokenId);
-        uint256 totalInterest = 0;
-        for (uint256 i = 0; i < depositIds.length; i++) {
-            Deposit memory deposit = deposits[tokenId][depositIds[i]];
-            if (deposit.interestCollected == deposit.interestReceivable || deposit.principal == 0) {
-                continue;
-            }
-            uint256 durationPassed = block.timestamp - max(deposit.lastClaimedAt, deposit.startTime);
-            // TODO: check dust precision
-            uint256 interestCollectible = (deposit.interestReceivable * durationPassed) / (deposit.maturity - deposit.startTime);
-            if (interestCollectible + deposit.interestCollected > deposit.interestReceivable) {
-                interestCollectible = deposit.interestReceivable - deposit.interestCollected;
-            }
-            deposits[tokenId][depositIds[i]].interestCollected = deposit.interestCollected + interestCollectible;
-            deposits[tokenId][depositIds[i]].lastClaimedAt = block.timestamp;
-            emit InterestClaimed(tokenId, depositIds[i], interestCollectible);
-            totalInterest += interestCollectible;
-        }
-        sendToken(receiver, totalInterest);
-        return totalInterest;
-    }
-
-    function claimReferralBonus(uint256 tokenId, uint256[] memory bonusIds) external returns (uint256) {
+    function claimReferralBonus(uint256 tokenId, uint256[] calldata referralBonusIds) external nonReentrant returns (uint256) {
         if (!profiles[tokenId].isInitialised) {
             revert InvalidArgument(tokenId, "Token Id does not exist");
         }
         address receiver = myDanPass.ownerOf(tokenId);
         uint256 totalReward = 0;
-        for (uint256 i = 0; i < bonusIds.length; i++) {
-            ReferralReward storage reward = referralRewards[tokenId][bonusIds[i]];
-            if (reward.rewardClaimed == reward.rewardReceivable) {
-                continue;
-            }
-            totalReward += calculateCollectableReward(tokenId, reward, bonusIds[i]);
-        }
-
-        sendToken(receiver, totalReward);
+        totalReward = _claimReferralBonus(tokenId, referralBonusIds);
+        sendToken(targetToken, receiver, totalReward);
 
         return totalReward;
     }
 
-    function sendToken(address to, uint256 value) internal {
-        if (IERC20Expanded(targetToken).balanceOf(address(this)) < value) {
-            revert InvalidArgument(value, "Not enough token balance");
-        }
-        IERC20Expanded(targetToken).transfer(to, value);
-    }
+    /**********************************/
+    /**********************************/
+    /*****                       ******/
+    /*****     VIEW FUNCTIONS    ******/
+    /*****                       ******/
+    /**********************************/
+    /**********************************/
 
-    function calculateCollectableReward(uint256 tokenId, ReferralReward storage reward, uint256 rewardId) internal returns (uint256) {
+    function getClaimableReferralBonus(uint256 tokenId, uint256[] calldata referralBonusIds) public view returns (uint256) {
         // FIX storage vs memory
         uint256 totalReward = 0;
-        for (uint256 i = 0; i < tierActivationLogs[tokenId][reward.referralLevel].length; i++) {
+        for (uint256 i = 0; i < referralBonusIds.length; i++) {
+            totalReward += calculateClaimableReferralBonus(tokenId, referralBonusIds[i]);
+        }
+        return totalReward;
+    }
+
+    function getCollectableInterests(uint256 tokenId, uint256[] calldata depositIds) public view returns (uint256) {
+        uint256 totalInterests = 0;
+        for (uint256 i = 0; i < depositIds.length; i++) {
+            totalInterests += _calculateInterests(tokenId, depositIds[i]);
+        }
+        return totalInterests;
+    }
+
+    /**********************************/
+    /**********************************/
+    /*****                       ******/
+    /*****  INTERNAL FUNCTIONS   ******/
+    /*****                       ******/
+    /**********************************/
+    /**********************************/
+
+    function sendToken(address token, address to, uint256 value) internal {
+        if (IERC20Expanded(token).balanceOf(address(this)) < value) {
+            revert InvalidArgument(value, "Not enough token balance");
+        }
+        IERC20Expanded(token).transfer(to, value);
+    }
+
+    function _claimReferralBonus(uint256 tokenId, uint256[] calldata referralBonusIds) internal returns (uint256) {
+        // FIX storage vs memory
+        uint256 totalReward = 0;
+        for (uint256 i = 0; i < referralBonusIds.length; i++) {
+            uint256 referralBonusId = referralBonusIds[i];
+            uint256 claimableReward = calculateClaimableReferralBonus(tokenId, referralBonusId);
+            if (claimableReward > 0) {
+                referralRewards[tokenId][referralBonusId].lastClaimedAt = block.timestamp;
+                referralRewards[tokenId][referralBonusId].rewardClaimed += claimableReward;
+                totalReward += claimableReward;
+                emit ReferralBonusClaimed(tokenId, referralBonusId, claimableReward);
+            }
+        }
+        return totalReward;
+    }
+
+    function calculateClaimableReferralBonus(uint256 tokenId, uint256 referralBonusId) private view returns (uint256) {
+        ReferralReward storage reward = referralRewards[tokenId][referralBonusId];
+        if (reward.rewardClaimed == reward.referralBonusReceivable) {
+            return 0;
+        }
+        uint256 totalReward = 0;
+        uint256 tierActivationLogArrayLength = tierActivationLogs[tokenId][reward.referralLevel].length;
+        for (uint256 i = 0; i < tierActivationLogArrayLength; i++) {
             uint256 activationStart = tierActivationLogs[tokenId][reward.referralLevel][i].start;
             uint256 activationEnd = tierActivationLogs[tokenId][reward.referralLevel][i].end;
             if (activationEnd == 0) {
@@ -241,72 +279,46 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
             }
 
             uint256 applicableDuration = min(block.timestamp, activationEnd, reward.maturity) - max(activationStart, reward.startTime, reward.lastClaimedAt);
-
-            uint256 rewardCollectible = (reward.rewardReceivable * applicableDuration) / (reward.maturity - reward.startTime);
-            if (rewardCollectible + reward.rewardClaimed > reward.rewardReceivable) {
-                rewardCollectible = reward.rewardReceivable - reward.rewardClaimed;
+            uint256 rewardCollectible = (reward.referralBonusReceivable * applicableDuration) / (reward.maturity - reward.startTime);
+            if (rewardCollectible + reward.rewardClaimed > reward.referralBonusReceivable) {
+                rewardCollectible = reward.referralBonusReceivable - reward.rewardClaimed;
             }
-            reward.rewardClaimed = reward.rewardClaimed + rewardCollectible;
             totalReward += rewardCollectible;
         }
-        reward.lastClaimedAt = block.timestamp;
-        emit ReferralBonusClaimed(tokenId, rewardId, totalReward);
         return totalReward;
     }
 
-    // INTERNAL FUNCTIONS
-    function max(uint256 a, uint256 b, uint256 c) internal pure returns (uint256) {
-        if (a > b) {
-            if (a > c) {
-                return a;
-            }
-            return c;
-        }
-        if (b > c) {
-            return b;
-        }
-        return c;
-    }
+    function handleMembershipTierUpdate(uint256 tokenId, Profile storage profile, uint256 newMembershipTierIndex, uint256 newDepositSum) internal {
+        uint256 oldMembershipTierIndex = profile.membershipTier;
+        profile.membershipTier = newMembershipTierIndex;
+        profile.depositSum = newDepositSum;
+        emit MembershipTierChanged(tokenId, newMembershipTierIndex);
 
-    function min(uint256 a, uint256 b, uint256 c) internal pure returns (uint256) {
-        if (a < b) {
-            if (a < c) {
-                return a;
-            }
-            return c;
-        }
-        if (b < c) {
-            return b;
-        }
-        return c;
-    }
-
-    function max(uint256 a, uint256 b) internal pure returns (uint256) {
-        if (a > b) {
-            return a;
-        }
-        return b;
-    }
-
-    function handleMembershipTierChange(uint256 tokenId, MembershipTierChange memory tierChange) internal {
-        if (tierChange.oldTier == tierChange.newTier) {
+        if (oldMembershipTierIndex == newMembershipTierIndex) {
             return;
-        } else if (tierChange.newTier > tierChange.oldTier) {
-            // upgrade
-            for (uint256 tier = tierChange.oldTier + 1; tier <= tierChange.newTier; tier++) {
-                uint256 lowerBound = membershipTiers[tier].referralBonusCollectibleLevelLowerBound;
-                uint256 upperBound = membershipTiers[tier].referralBonusCollectibleLevelUpperBound;
-                for (uint256 referralLevel = lowerBound; referralLevel <= upperBound; referralLevel++) {
+        }
+
+        bool isUpgrade;
+        uint256 startTier;
+        uint256 endTier;
+        if (newMembershipTierIndex > oldMembershipTierIndex) {
+            isUpgrade = true;
+            startTier = oldMembershipTierIndex + 1;
+            endTier = newMembershipTierIndex;
+        } else {
+            isUpgrade = false;
+            startTier = newMembershipTierIndex + 1;
+            endTier = oldMembershipTierIndex;
+        }
+        for (uint256 tier = startTier; tier <= endTier; tier++) {
+            uint256 lowerBound = membershipTiers[tier].referralBonusCollectibleLevelLowerBound;
+            uint256 upperBound = membershipTiers[tier].referralBonusCollectibleLevelUpperBound;
+            for (uint256 referralLevel = lowerBound; referralLevel <= upperBound; referralLevel++) {
+                if (isUpgrade) {
                     tierActivationLogs[tokenId][referralLevel].push(TierActivationLog({start: block.timestamp, end: 0}));
                     uint256 logIndex = tierActivationLogs[tokenId][referralLevel].length - 1;
                     emit ReferralBonusLevelCollectionActivated(tokenId, referralLevel, logIndex, block.timestamp);
-                }
-            }
-        } else {
-            for (uint256 tier = tierChange.newTier + 1; tier <= tierChange.oldTier; tier++) {
-                uint256 lowerBound = membershipTiers[tier].referralBonusCollectibleLevelLowerBound;
-                uint256 upperBound = membershipTiers[tier].referralBonusCollectibleLevelUpperBound;
-                for (uint256 referralLevel = lowerBound; referralLevel <= upperBound; referralLevel++) {
+                } else {
                     uint256 logIndex = tierActivationLogs[tokenId][referralLevel].length - 1;
                     tierActivationLogs[tokenId][referralLevel][logIndex].end = block.timestamp;
                     emit ReferralBonusLevelCollectionDeactivated(tokenId, referralLevel, logIndex, block.timestamp);
@@ -315,20 +327,42 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
         }
     }
 
-    function isValidDepositDuration(uint256 duration) internal view returns (bool) {
+    function _collectInterests(uint256 tokenId, uint256[] calldata depositIds) internal returns (uint256) {
+        address receiver = myDanPass.ownerOf(tokenId);
+        uint256 totalInterest = 0;
+        for (uint256 i = 0; i < depositIds.length; i++) {
+            Deposit memory deposit = deposits[tokenId][depositIds[i]];
+            uint256 interestCollectable = _calculateInterests(tokenId, depositIds[i]);
+            deposits[tokenId][depositIds[i]].interestCollected = deposit.interestCollected + interestCollectable;
+            deposits[tokenId][depositIds[i]].lastClaimedAt = block.timestamp;
+            emit InterestClaimed(tokenId, depositIds[i], interestCollectable);
+            totalInterest += interestCollectable;
+        }
+        sendToken(targetToken, receiver, totalInterest);
+        return totalInterest;
+    }
+
+    function _calculateInterests(uint256 tokenId, uint256 depositId) internal view returns (uint256) {
+        Deposit memory deposit = deposits[tokenId][depositId];
+        if (deposit.interestCollected == deposit.interestReceivable || deposit.principal == 0) {
+            return 0;
+        }
+        uint256 durationPassed = block.timestamp - max(deposit.lastClaimedAt, deposit.startTime);
+        // TODO: check dust precision
+        uint256 interestCollectible = (deposit.interestReceivable * durationPassed) / (deposit.maturity - deposit.startTime);
+        if (interestCollectible + deposit.interestCollected > deposit.interestReceivable) {
+            interestCollectible = deposit.interestReceivable - deposit.interestCollected;
+        }
+        return interestCollectible;
+    }
+
+    function isValidDepositDuration(uint256 duration) public view returns (bool) {
         for (uint256 i = 0; i < depositDurations.length; i++) {
             if (duration == depositDurations[i]) {
                 return true;
             }
         }
         return false;
-    }
-
-    function updateProfileMembershipTierAfterDeposit(Profile storage profile, uint256 newMembershipTierIndex, uint256 newDepositSum) internal returns (MembershipTierChange memory) {
-        uint256 oldMembershipTierIndex = profile.membershipTier;
-        profile.membershipTier = newMembershipTierIndex;
-        profile.depositSum = newDepositSum;
-        return MembershipTierChange({oldTier: oldMembershipTierIndex, newTier: newMembershipTierIndex});
     }
 
     function createDepositObject(uint256 tokenId, uint256 membershipTierInterestRate, uint256 amount, uint256 duration) internal returns (uint256) {
@@ -346,41 +380,35 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
             interestCollected: 0,
             lastClaimedAt: 0
         });
-        depositList[tokenId].push(depositId);
         emit DepositCreated(tokenId, depositId, amount, duration, interestRate, interestReceivable);
         return depositId;
     }
 
-    function createRewardObjects(uint256 tokenId, uint256 initialReferrerTokenId, uint256 depositId, uint256 amount, uint256 duration) internal {
+    function createReferralBonusObjects(uint256 tokenId, uint256 referrerTokenId, uint256 depositId, uint256 depositedPrincipal, uint256 duration) internal {
         if (tokenId == genesisTokenId) {
+            // do not create referral bonus objects for genesis token
             return;
         }
-        uint256 referrerTokenId = initialReferrerTokenId;
-
-        for (uint256 i = 0; i < referralBonusRewardRates.length; i++) {
+        for (uint256 referralLevel = 1; referralLevel < referralBonusRates.length; referralLevel++) {
             // TODO: precision
-            uint256 rewardReceivable = ((amount * referralBonusRewardRates[i]) * duration) / 10000 / 365 days;
-            if (rewardReceivable == 0) {
+            uint256 referralBonusReceivable = ((depositedPrincipal * referralBonusRates[referralLevel]) * duration) / 10000 / 365 days;
+            if (referralBonusReceivable == 0) {
                 continue;
             }
-
-            uint256 referralLevel = i + 1;
-            uint256 rewardId = nextReferralRewardId;
-
+            uint256 referralBonusId = nextReferralRewardId;
             nextReferralRewardId += 1;
-
-            referralRewards[referrerTokenId][rewardId] = ReferralReward({
+            referralRewards[referrerTokenId][referralBonusId] = ReferralReward({
                 referralLevel: referralLevel,
                 startTime: block.timestamp,
                 maturity: block.timestamp + duration,
-                rewardReceivable: rewardReceivable,
+                referralBonusReceivable: referralBonusReceivable,
                 rewardClaimed: 0,
                 lastClaimedAt: 0,
                 depositId: depositId
             });
             // next iteration
 
-            emit ReferralRewardCreated(referrerTokenId, rewardId, referralLevel);
+            emit ReferralRewardCreated(referrerTokenId, referralBonusId, referralLevel);
             uint256 nextReferrerTokenId = profiles[referrerTokenId].referrerTokenId;
 
             if (nextReferrerTokenId == referrerTokenId) {
@@ -391,13 +419,12 @@ contract MyDanDefi is Ownable, MyDanDefiStorage {
         }
     }
 
-    function getMembershipTier(uint256 depositSum) internal view returns (uint256 index, MembershipTier memory) {
+    function getMembershipTierInterestByDeposit(uint256 depositSum) internal view returns (uint256 index, uint256 interestRate) {
         for (uint256 i = 0; i < membershipTiers.length; i++) {
             if (depositSum >= membershipTiers[i].lowerThreshold && depositSum < membershipTiers[i].upperThreshold) {
-                return (i, membershipTiers[i]);
+                return (i, membershipTiers[i].interestRate);
             }
         }
         revert InvalidArgument(depositSum, "No membership tier found");
     }
-    // function withdraw(uint256 tokenId, uint256[] memory depositIds[]) external;
 }
