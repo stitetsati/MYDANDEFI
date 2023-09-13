@@ -8,12 +8,12 @@ interface IMyDanDefi {
     event DurationBonusRateUpdated(uint256 duration, uint256 newRate);
     event PassMinted(address minter, uint256 mintedTokenId, uint256 referrerTokenId);
     event ReferralCodeCreated(string referralCode, uint256 tokenId);
-    event ReferralRewardCreated(uint256 referrerTokenId, uint256 rewardId, uint256 referralLevel);
+    event ReferralRewardCreated(uint256 referrerTokenId, uint256 referralBonusId, uint256 referralLevel);
     event DepositCreated(uint256 tokenId, uint256 depositId, uint256 amount, uint256 duration, uint256 interestRate, uint256 interestReceivable);
     event MembershipTierChanged(uint256 tokenId, uint256 membershipTierIndex);
     event InterestClaimed(uint256 tokenId, uint256 depositId, uint256 interestCollectible);
 
-    event ReferralBonusClaimed(uint256 tokenId, uint256 rewardId, uint256 rewardCollectible);
+    event ReferralBonusClaimed(uint256 tokenId, uint256 referralBonusId, uint256 rewardCollectible);
     event ReferralBonusLevelCollectionActivated(uint256 tokenId, uint256 referralLevel, uint256 logIndex, uint256 timestamp);
     event ReferralBonusLevelCollectionDeactivated(uint256 tokenId, uint256 referralLevel, uint256 logIndex, uint256 timestamp);
     event DepositWithdrawn(uint256 tokenId, uint256 depositId, uint256 principal);
@@ -38,7 +38,7 @@ interface IMyDanDefi {
         uint256 referralLevel;
         uint256 startTime;
         uint256 maturity;
-        uint256 rewardReceivable;
+        uint256 referralBonusReceivable;
         uint256 rewardClaimed;
         uint256 lastClaimedAt;
         uint256 depositId;
@@ -67,13 +67,13 @@ interface IMyDanDefi {
 
     function insertMembershipTiers(MembershipTier[] calldata newMembershipTiers) external;
 
-    function setReferralBonusRewardRates(uint256[] calldata rates) external;
+    function setReferralBonusRates(uint256[] calldata rates) external;
 
     function claimPass(string memory referralCode) external returns (uint256);
 
     function setReferralCode(string memory referralCode, uint256 tokenId) external;
 
-    function claimInterests(uint256 tokenId, uint256[] calldata depositIds) external returns (uint256);
+    function collectInterests(uint256 tokenId, uint256[] calldata depositIds) external returns (uint256);
 
     function deposit(uint256 tokenId, uint256 amount, uint256 duration) external returns (uint256);
     // function withdraw(uint256 tokenId, uint256[] memory depositIds) external;
@@ -87,7 +87,7 @@ abstract contract MyDanDefiStorage is IMyDanDefi {
     uint256 public nextDepositId;
     uint256 public nextReferralRewardId;
     MyDanPass public myDanPass;
-    uint256[] public referralBonusRewardRates;
+    uint256[] public referralBonusRates;
     MembershipTier[] public membershipTiers;
     uint256[] public depositDurations;
     mapping(uint256 => uint256) public durationBonusRates;
@@ -97,8 +97,6 @@ abstract contract MyDanDefiStorage is IMyDanDefi {
     mapping(uint256 => mapping(uint256 => Deposit)) public deposits;
     // tokenId -> referralRewardId -> ReferralReward
     mapping(uint256 => mapping(uint256 => ReferralReward)) public referralRewards;
-    // tokenId -> depositId[]
-    mapping(uint256 => uint256[]) public depositList;
     // tokenId -> referralLevel -> referralRewardId[]
     mapping(uint256 => mapping(uint256 => TierActivationLog[])) public tierActivationLogs;
 }

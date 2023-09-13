@@ -18,7 +18,7 @@ contract MyDanDefiTest is Test {
     MockERC20 mockERC20 = new MockERC20();
     uint256 oneDollar = 10 ** mockERC20.decimals();
     uint256 referralBonusMaxLevel;
-    event ReferralRewardCreated(uint256 referrerTokenId, uint256 rewardId, uint256 referralLevel);
+    event ReferralRewardCreated(uint256 referrerTokenId, uint256 referralBonusId, uint256 referralLevel);
     event ReferralBonusLevelCollectionDeactivated(uint256 tokenId, uint256 referralLevel, uint256 logIndex, uint256 timestamp);
 
     constructor() {}
@@ -79,17 +79,18 @@ contract MyDanDefiTest is Test {
         myDanDefi.insertMembershipTiers(tiers);
     }
 
-    function setReferralBonusRewardRates() internal {
-        uint256 length = 7;
+    function setReferralBonusRates() internal {
+        uint256 length = 8;
         uint256[] memory rates = new uint256[](length);
-        rates[0] = 600;
-        rates[1] = 200;
+        rates[0] = 0;
+        rates[1] = 600;
         rates[2] = 200;
-        rates[3] = 100;
+        rates[3] = 200;
         rates[4] = 100;
         rates[5] = 100;
         rates[6] = 100;
-        myDanDefi.setReferralBonusRewardRates(rates);
+        rates[7] = 100;
+        myDanDefi.setReferralBonusRates(rates);
         referralBonusMaxLevel = length;
     }
 
@@ -99,7 +100,7 @@ contract MyDanDefiTest is Test {
         myDanDefi.setAssetsUnderManagementCap(100 ether);
         setDurations();
         setMembershipTiers();
-        setReferralBonusRewardRates();
+        setReferralBonusRates();
         _;
     }
 
@@ -229,12 +230,12 @@ contract MyDanDefiTest is Test {
             assertEq(lastClaimedAt, 0);
         }
         {
-            (uint256 referralLevel, uint256 referralStartTime, uint256 referralMaturity, uint256 rewardReceivable, uint256 rewardClaimed, uint256 lastClaimedAt, uint256 depositId) = myDanDefi
+            (uint256 referralLevel, uint256 referralStartTime, uint256 referralMaturity, uint256 referralBonusReceivable, uint256 rewardClaimed, uint256 lastClaimedAt, uint256 depositId) = myDanDefi
                 .referralRewards(referrerTokenId, 0);
             assertEq(referralLevel, 1);
             assertEq(referralStartTime, block.timestamp);
             assertEq(referralMaturity, block.timestamp + validDuration);
-            assertEq(rewardReceivable, (((myDanDefi.referralBonusRewardRates(0) * oneDollar) / 10000) * validDuration) / 365 days);
+            assertEq(referralBonusReceivable, (((myDanDefi.referralBonusRates(1) * oneDollar) / 10000) * validDuration) / 365 days);
             assertEq(rewardClaimed, 0);
             assertEq(lastClaimedAt, 0);
             assertEq(depositId, 0);
@@ -261,12 +262,12 @@ contract MyDanDefiTest is Test {
             assertEq(interestCollected, 0);
         }
         {
-            (uint256 referralLevel, uint256 referralStartTime, uint256 referralMaturity, uint256 rewardReceivable, uint256 rewardClaimed, uint256 lastClaimedAt, uint256 depositId) = myDanDefi
+            (uint256 referralLevel, uint256 referralStartTime, uint256 referralMaturity, uint256 referralBonusReceivable, uint256 rewardClaimed, uint256 lastClaimedAt, uint256 depositId) = myDanDefi
                 .referralRewards(referrerTokenId, 0);
             assertEq(referralLevel, 1);
             assertEq(referralStartTime, block.timestamp);
             assertEq(referralMaturity, block.timestamp + validDuration);
-            assertEq(rewardReceivable, (((myDanDefi.referralBonusRewardRates(0) * oneDollar * 100) / 10000) * validDuration) / 365 days);
+            assertEq(referralBonusReceivable, (((myDanDefi.referralBonusRates(1) * oneDollar * 100) / 10000) * validDuration) / 365 days);
             assertEq(rewardClaimed, 0);
             assertEq(lastClaimedAt, 0);
             assertEq(depositId, 0);
@@ -338,7 +339,6 @@ contract MyDanDefiTest is Test {
         mockERC20.approve(address(myDanDefi), testAmount);
         uint256 tokenId;
         string memory referralCode = myDanDefi.genesisReferralCode();
-        uint256 referrerId = 0;
         for (uint256 i = 0; i < referralBonusMaxLevel; i++) {
             tokenId = myDanDefi.claimPass(referralCode);
             // referralIds[tokenId] = referrerId;
@@ -348,9 +348,9 @@ contract MyDanDefiTest is Test {
         }
         uint256 validDuration = myDanDefi.depositDurations(0);
 
-        for (uint256 i = 0; i < referralBonusMaxLevel; i++) {
+        for (uint256 i = 1; i < referralBonusMaxLevel; i++) {
             vm.expectEmit(false, false, false, true);
-            emit ReferralRewardCreated(referralBonusMaxLevel - (i + 1), i, i + 1);
+            emit ReferralRewardCreated(referralBonusMaxLevel - (i), i - 1, i);
         }
         myDanDefi.deposit(tokenId, testAmount, validDuration);
     }
@@ -366,7 +366,7 @@ contract MyDanDefiTest is Test {
         vm.warp(block.timestamp + validDuration / 3);
         uint256[] memory depositIds = new uint256[](1);
         depositIds[0] = 0;
-        myDanDefi.claimInterests(tokenId, depositIds);
+        myDanDefi.collectInterests(tokenId, depositIds);
         uint256 expectedInterestClaimed = (((testAmount * 700) / 10000) * 90) / 365 / 3;
         assertEq(expectedInterestClaimed, mockERC20.balanceOf(address(this)));
         (uint256 principal, uint256 startTime, uint256 maturity, uint256 interestRate, uint256 interestReceivable, uint256 interestCollected, uint256 lastClaimedAt) = myDanDefi.deposits(tokenId, 0);
@@ -386,22 +386,21 @@ contract MyDanDefiTest is Test {
         uint256 tokenId = myDanDefi.claimPass(myDanDefi.genesisReferralCode());
         uint256 validDuration = myDanDefi.depositDurations(0);
         myDanDefi.deposit(tokenId, testAmount, validDuration);
-        uint256 expectedStartTime = block.timestamp;
         vm.warp(block.timestamp + validDuration / 3);
         uint256[] memory depositIds = new uint256[](1);
         depositIds[0] = 0;
-        myDanDefi.claimInterests(tokenId, depositIds);
+        myDanDefi.collectInterests(tokenId, depositIds);
         uint256 expectedInterestClaimed = (((testAmount * 700) / 10000) * 90) / 365 / 3;
         uint256 totalExpectedInterest = (((testAmount * 700) / 10000) * 90) / 365;
         assertEq(expectedInterestClaimed, mockERC20.balanceOf(address(this)));
         vm.warp(block.timestamp + validDuration / 3);
-        myDanDefi.claimInterests(tokenId, depositIds);
+        myDanDefi.collectInterests(tokenId, depositIds);
         assertEq(expectedInterestClaimed * 2, mockERC20.balanceOf(address(this)));
         vm.warp(block.timestamp + validDuration / 3 + 100);
-        myDanDefi.claimInterests(tokenId, depositIds);
+        myDanDefi.collectInterests(tokenId, depositIds);
         assertEq(totalExpectedInterest, mockERC20.balanceOf(address(this)));
         vm.warp(block.timestamp + validDuration / 3);
-        uint256 received = myDanDefi.claimInterests(tokenId, depositIds);
+        uint256 received = myDanDefi.collectInterests(tokenId, depositIds);
         assertEq(0, received);
         assertEq(totalExpectedInterest, mockERC20.balanceOf(address(this)));
     }
@@ -414,7 +413,6 @@ contract MyDanDefiTest is Test {
         uint256 validDuration = myDanDefi.depositDurations(0);
         myDanDefi.deposit(tokenId, testAmount, validDuration);
 
-        uint256 expectedTotalReward = (((testAmount * 600) / 10000) * validDuration) / 365 days;
         vm.warp(block.timestamp + validDuration / 2);
         uint256[] memory bonusIds = new uint256[](1);
         bonusIds[0] = 0;
@@ -494,21 +492,16 @@ contract MyDanDefiTest is Test {
         uint256 totalReward = (testAmount * 600) / 10000;
         // this takes into the 10 extra days becoz the user hasnt been downgraded due to withdrawal.
         uint256 expectedReferralReward = (totalReward * 280) / 365;
-        uint256[] memory rewardIds = new uint256[](1);
-        rewardIds[0] = 0;
-        myDanDefi.claimReferralBonus(genesisTokenId, rewardIds);
+        uint256[] memory referralBonusIds = new uint256[](1);
+        referralBonusIds[0] = 0;
+        uint256 calculatedReferralBonus = myDanDefi.getClaimableReferralBonus(genesisTokenId, referralBonusIds);
+        uint256 receivedReferralBonus = myDanDefi.claimReferralBonus(genesisTokenId, referralBonusIds);
+        assertEq(calculatedReferralBonus, expectedReferralReward);
+        assertEq(receivedReferralBonus, expectedReferralReward);
         {
-            (
-                uint256 referralLevel,
-                uint256 referralStartTime,
-                uint256 referralMaturity,
-                uint256 rewardReceivable,
-                uint256 rewardClaimed,
-                uint256 lastClaimedAt,
-                uint256 contributorDepositId
-            ) = myDanDefi.referralRewards(0, 0);
+            (uint256 referralLevel, , , uint256 referralBonusReceivable, uint256 rewardClaimed, uint256 lastClaimedAt, uint256 contributorDepositId) = myDanDefi.referralRewards(0, 0);
             assertEq(referralLevel, 1);
-            assertEq(rewardReceivable, totalReward);
+            assertEq(referralBonusReceivable, totalReward);
             assertEq(rewardClaimed, expectedReferralReward);
             assertEq(lastClaimedAt, block.timestamp);
             assertEq(contributorDepositId, 0);
@@ -530,9 +523,9 @@ contract MyDanDefiTest is Test {
         mockERC20.mint(address(myDanDefi), testAmount);
         uint256 deactivationTime = block.timestamp;
         // expect events
-        for (uint256 referralLevel = 0; referralLevel < referralBonusMaxLevel; referralLevel++) {
+        for (uint256 referralLevel = 1; referralLevel < referralBonusMaxLevel; referralLevel++) {
             vm.expectEmit(false, false, false, true);
-            emit ReferralBonusLevelCollectionDeactivated(tokenId, referralLevel + 1, 0, deactivationTime);
+            emit ReferralBonusLevelCollectionDeactivated(tokenId, referralLevel, 0, deactivationTime);
         }
         uint256 withdrawnAmount = myDanDefi.withdraw(tokenId, depositIds);
         // expect aum decrease
@@ -564,13 +557,15 @@ contract MyDanDefiTest is Test {
         vm.warp(block.timestamp + duration / 2);
         uint256[] memory depositIds = new uint256[](1);
         depositIds[0] = depositId;
-        uint256 interestsClaimed = myDanDefi.claimInterests(tokenId, depositIds);
+        uint256 calculatedInterests = myDanDefi.getCollectableInterests(tokenId, depositIds);
+        uint256 interestsClaimed = myDanDefi.collectInterests(tokenId, depositIds);
         // check half interest claimed
         uint256 expectedHalfInterests = ((((testAmount * 850) / 10000) * duration) / 2) / 365 days;
+        assertEq(interestsClaimed, calculatedInterests);
         assertEq(interestsClaimed, expectedHalfInterests);
         assertEq(mockERC20.balanceOf(address(this)), interestsClaimed);
         vm.warp(block.timestamp + duration / 2);
-        interestsClaimed = myDanDefi.claimInterests(tokenId, depositIds);
+        interestsClaimed = myDanDefi.collectInterests(tokenId, depositIds);
         assertEq(interestsClaimed, expectedHalfInterests);
         assertEq(mockERC20.balanceOf(address(this)), expectedHalfInterests * 2);
         uint256 withdrawnAmount = myDanDefi.withdraw(tokenId, depositIds);
