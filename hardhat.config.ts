@@ -3,6 +3,7 @@ import { HardhatUserConfig, task } from "hardhat/config";
 import "@nomicfoundation/hardhat-foundry";
 import "@nomicfoundation/hardhat-verify";
 import "@typechain/hardhat";
+import "@nomicfoundation/hardhat-ethers";
 import "hardhat-deploy";
 
 dotenv.config();
@@ -15,6 +16,7 @@ const config: HardhatUserConfig = {
     usdt: {
       mainnet: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
       goerli: "0xb2C4502442c9CaF42520b1E4A6767Ba6C550b913",
+      hardhat: "0xb2C4502442c9CaF42520b1E4A6767Ba6C550b913",
     },
   },
   solidity: {
@@ -53,6 +55,7 @@ const config: HardhatUserConfig = {
   },
   etherscan: {
     apiKey: {
+      hardhat: "",
       mainnet: `${process.env.ETHERSCAN_API_KEY}`,
       goerli: `${process.env.ETHERSCAN_API_KEY}`,
     },

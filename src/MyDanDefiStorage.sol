@@ -1,5 +1,7 @@
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.10;
 import "./MyDanPass.sol";
+import "./IMyDanPass.sol";
 
 interface IMyDanDefi {
     event AssetsUnderManagementCapSet(uint256 newCap);
@@ -86,7 +88,7 @@ abstract contract MyDanDefiStorage is IMyDanDefi {
     uint256 public currentAUM;
     uint256 public nextDepositId;
     uint256 public nextReferralRewardId;
-    MyDanPass public myDanPass;
+    IMyDanPass public myDanPass;
     uint256[] public referralBonusRates;
     MembershipTier[] public membershipTiers;
     uint256[] public depositDurations;

@@ -6,13 +6,11 @@ import "forge-std/Test.sol";
 import "../src/MyDanDefi.sol";
 import "../src/MyDanDefiStorage.sol";
 import "../src/MyDanDefiProxy.sol";
-import "../src/MyDanPass.sol";
 import "./mocks/MockERC20.sol";
 import "./MyDanDefi.setup.t.sol";
 import "openzeppelin-contracts/contracts/utils/Strings.sol";
 
 contract MyDanDefiTest is Test, MyDanDefiTestSetup {
-    using LowerCaseConverter for string;
     using Strings for uint256;
     event ReferralRewardCreated(uint256 referrerTokenId, uint256 referralBonusId, uint256 referralLevel);
     event ReferralBonusLevelCollectionDeactivated(uint256 tokenId, uint256 referralLevel, uint256 logIndex, uint256 timestamp);
@@ -24,7 +22,7 @@ contract MyDanDefiTest is Test, MyDanDefiTestSetup {
         assertEq(referrerTokenId, myDanDefi.genesisTokenId());
         // test non genesis referral code
         string memory referralCode = "mydandefi2";
-        vm.expectRevert(abi.encodeWithSelector(InvalidStringArgument.selector, referralCode, "Referral code does not exist"));
+        vm.expectRevert(abi.encodeWithSelector(InvalidStringArgument.selector));
         myDanDefi.claimPass(referralCode);
     }
 
@@ -43,7 +41,7 @@ contract MyDanDefiTest is Test, MyDanDefiTestSetup {
         uint256 mintedTokenId = myDanDefi.claimPass(myDanDefi.genesisReferralCode());
         // set referral code by non owner
         string memory referralCode = myDanDefi.genesisReferralCode();
-        vm.expectRevert(abi.encodeWithSelector(InvalidStringArgument.selector, referralCode, "Referral code cannot be genesis referral code"));
+        vm.expectRevert(abi.encodeWithSelector(InvalidStringArgument.selector));
         myDanDefi.setReferralCode(referralCode, mintedTokenId);
     }
 
@@ -53,7 +51,7 @@ contract MyDanDefiTest is Test, MyDanDefiTestSetup {
         uint256 mintedTokenId2 = myDanDefi.claimPass(myDanDefi.genesisReferralCode());
         string memory referralCode = "hello";
         myDanDefi.setReferralCode(referralCode, mintedTokenId1);
-        vm.expectRevert(abi.encodeWithSelector(InvalidStringArgument.selector, referralCode, "Referral code already used by other tokenId"));
+        vm.expectRevert(abi.encodeWithSelector(InvalidStringArgument.selector));
         myDanDefi.setReferralCode(referralCode, mintedTokenId2);
     }
 
@@ -63,7 +61,7 @@ contract MyDanDefiTest is Test, MyDanDefiTestSetup {
         string memory referralCode = "hello";
         myDanDefi.setReferralCode(referralCode, mintedTokenId);
         string memory newReferralCode = "hello2";
-        vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, mintedTokenId, "Referral code already set"));
+        vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, mintedTokenId));
         myDanDefi.setReferralCode(newReferralCode, mintedTokenId);
     }
 
@@ -86,7 +84,7 @@ contract MyDanDefiTest is Test, MyDanDefiTestSetup {
         mockERC20.mint(address(this), 100 * oneDollar);
         mockERC20.approve(address(myDanDefi), 100 * oneDollar);
         uint256 tokenId = myDanDefi.claimPass(myDanDefi.genesisReferralCode());
-        vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, oneDollar / 10, "Amount must be at least 1"));
+        vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, oneDollar / 10));
         myDanDefi.deposit(tokenId, oneDollar / 10, 1);
     }
 
@@ -95,7 +93,7 @@ contract MyDanDefiTest is Test, MyDanDefiTestSetup {
         mockERC20.mint(address(this), cap + 1);
         mockERC20.approve(address(myDanDefi), cap + 1);
         uint256 tokenId = myDanDefi.claimPass(myDanDefi.genesisReferralCode());
-        vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, cap + 1, "Amount exceeds cap"));
+        vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, cap + 1));
         myDanDefi.deposit(tokenId, cap + 1, 1);
     }
 
@@ -104,7 +102,7 @@ contract MyDanDefiTest is Test, MyDanDefiTestSetup {
         mockERC20.approve(address(myDanDefi), 100 ether);
         uint256 tokenId = myDanDefi.claimPass(myDanDefi.genesisReferralCode());
         uint256 duration = 1;
-        vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, duration, "Invalid deposit duration"));
+        vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, duration));
         myDanDefi.deposit(tokenId, 1 ether, duration);
     }
 
@@ -113,7 +111,7 @@ contract MyDanDefiTest is Test, MyDanDefiTestSetup {
         mockERC20.approve(address(myDanDefi), 1 ether);
         uint256 invalidTokenId = 100;
         uint256 validDuration = myDanDefi.depositDurations(0);
-        vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, invalidTokenId, "Token Id does not exist"));
+        vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, invalidTokenId));
         myDanDefi.deposit(invalidTokenId, 1 ether, validDuration);
     }
 
@@ -453,7 +451,7 @@ contract MyDanDefiTest is Test, MyDanDefiTestSetup {
         assertEq(membershipTier, 0);
         // withdraw again should revert
 
-        vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, depositId, "Deposit does not exist"));
+        vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, depositId));
         myDanDefi.withdraw(tokenId, depositIds);
     }
 

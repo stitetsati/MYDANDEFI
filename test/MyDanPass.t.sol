@@ -12,7 +12,8 @@ contract MyDanPassTest is Test {
     address minter = 0x00000000000000000000000000000000DeaDBeef;
 
     constructor() {
-        myDanPass = new MyDanPass(minter);
+        myDanPass = new MyDanPass();
+        myDanPass.setMinter(minter);
     }
 
     modifier afterMintOneNft() {
@@ -41,7 +42,7 @@ contract MyDanPassTest is Test {
         vm.prank(minter);
         uint256 tokenId = myDanPass.mint(deadAddress);
         assertEq(myDanPass.ownerOf(tokenId), deadAddress);
-        assertEq(myDanPass.totalSupply(), 1);
+        assertEq(myDanPass.totalSupply(), 2);
     }
 
     function testSetBaseUri() external afterMintOneNft {

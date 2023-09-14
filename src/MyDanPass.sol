@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.10;
 import "openzeppelin-contracts/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "openzeppelin-contracts/contracts/access/Ownable.sol";
@@ -11,8 +12,9 @@ contract MyDanPass is ERC721Enumerable, Ownable {
     string private _baseURIExtended;
     event Minted(address to, uint256 tokenId);
 
-    constructor(address _minter) ERC721("MyDanPass", "MDP") {
-        minter = _minter;
+    constructor() ERC721("MyDanPass", "MDP") {
+        minter = msg.sender;
+        mint(msg.sender);
     }
 
     modifier onlyMinter() {
@@ -30,7 +32,7 @@ contract MyDanPass is ERC721Enumerable, Ownable {
         _baseURIExtended = baseURI_;
     }
 
-    function mint(address to) external onlyMinter returns (uint256) {
+    function mint(address to) public onlyMinter returns (uint256) {
         uint256 currentTokenId = nextTokenId;
         _mint(to, currentTokenId);
         nextTokenId += 1;

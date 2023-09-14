@@ -12,7 +12,6 @@ import "./mocks/MockERC20.sol";
 import "./MyDanDefi.setup.t.sol";
 
 contract MyDanDefiTest is Test, MyDanDefiTestSetup {
-    using LowerCaseConverter for string;
     using Strings for uint256;
 
     function testDeploy() external {
@@ -27,7 +26,7 @@ contract MyDanDefiTest is Test, MyDanDefiTestSetup {
         myDanDefi.setAssetsUnderManagementCap(newCap);
         assertEq(myDanDefi.assetsUnderManagementCap(), newCap);
         // zero value guard
-        vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, 0, "Cap cannot be zero"));
+        vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, 0));
         myDanDefi.setAssetsUnderManagementCap(0);
     }
 
@@ -40,7 +39,7 @@ contract MyDanDefiTest is Test, MyDanDefiTestSetup {
             referralBonusCollectibleLevelLowerBound: 1,
             referralBonusCollectibleLevelUpperBound: 2
         });
-        vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, 0, "Index out of bounds"));
+        vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, 0));
         myDanDefi.editMembershipTier(0, newTier);
     }
 
@@ -81,14 +80,14 @@ contract MyDanDefiTest is Test, MyDanDefiTestSetup {
         assertEq(interestRate, 1000);
         // zero value guard
         newTier.interestRate = 0;
-        vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, newTier.interestRate, "Rate cannot be zero"));
+        vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, newTier.interestRate));
         myDanDefi.editMembershipTier(1, newTier);
     }
 
     function testSetDurationsWithMismatchedArrayLength() external {
         uint256[] memory durations = new uint256[](2);
         uint256[] memory bonusRates = new uint256[](3);
-        vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, durations.length, "Durations length does not match bonus rates length"));
+        vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, durations.length));
         myDanDefi.setDurations(durations, bonusRates);
     }
 
@@ -105,7 +104,7 @@ contract MyDanDefiTest is Test, MyDanDefiTestSetup {
         }
         // set zero value
         durations[0] = 0;
-        vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, durations[0], "Duration cannot be zero"));
+        vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, durations[0]));
         myDanDefi.setDurations(durations, bonusRates);
     }
 
@@ -151,7 +150,7 @@ contract MyDanDefiTest is Test, MyDanDefiTestSetup {
         assertEq(myDanDefi.referralBonusRates(2), 200);
         // test not zero value
         rates[0] = 10;
-        vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, rates[0], "First rate must be zero"));
+        vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, rates[0]));
         myDanDefi.setReferralBonusRates(rates);
     }
 

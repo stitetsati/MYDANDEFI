@@ -11,7 +11,6 @@ import "../src/MyDanPass.sol";
 import "./mocks/MockERC20.sol";
 
 contract MyDanDefiTestSetup is Test {
-    using LowerCaseConverter for string;
     using Strings for uint256;
     MyDanDefi myDanDefi;
     MyDanPass myDanPass;
@@ -21,10 +20,11 @@ contract MyDanDefiTestSetup is Test {
     uint256 referralBonusMaxLevel;
 
     constructor() {
+        myDanPass = new MyDanPass();
         MyDanDefi myDanDefiImpl = new MyDanDefi();
-        MyDanDefiProxy myDanDefiProxy = new MyDanDefiProxy(address(myDanDefiImpl), abi.encodeWithSelector(myDanDefiImpl.initialize.selector, address(mockERC20)));
+        MyDanDefiProxy myDanDefiProxy = new MyDanDefiProxy(address(myDanDefiImpl), abi.encodeWithSelector(myDanDefiImpl.initialize.selector, address(mockERC20), address(myDanPass)));
+        myDanPass.setMinter(address(myDanDefiProxy));
         myDanDefi = MyDanDefi(address(myDanDefiProxy));
-        myDanPass = myDanDefi.myDanPass();
     }
 
     function setDurations() internal {
@@ -99,10 +99,6 @@ contract MyDanDefiTestSetup is Test {
     }
 
     modifier Setup() {
-        MyDanDefi myDanDefiImpl = new MyDanDefi();
-        MyDanDefiProxy myDanDefiProxy = new MyDanDefiProxy(address(myDanDefiImpl), abi.encodeWithSelector(myDanDefiImpl.initialize.selector, address(mockERC20)));
-        myDanDefi = MyDanDefi(address(myDanDefiProxy));
-        myDanPass = myDanDefi.myDanPass();
         myDanDefi.setAssetsUnderManagementCap(100 ether);
         setDurations();
         setMembershipTiers();
