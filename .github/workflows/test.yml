@@ -34,6 +34,9 @@ jobs:
         id: test
 
       - name: deploy
+        env:
+          DEPLOYER_PRIVATE_KEY: 1d6dd2d1632dc861c697982d99cde7475a96f4b7ff9ab4352096be3700f8c4af
+          TEST_PRIVATE_KEY: 1d6dd2d1632dc861c697982d99cde7475a96f4b7ff9ab4352096be3700f8c4af
         run: |
           npx hardhat deploy --tags pass,main,setup --network hardhat
 
