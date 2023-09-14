@@ -4,24 +4,16 @@ pragma solidity ^0.8.0;
 
 import "forge-std/Test.sol";
 import "../src/MyDanDefi.sol";
-import "../src/MyDanDefiStorage.sol";
 import "../src/MyDanDefiProxy.sol";
+import "../src/MyDanDefiStorage.sol";
+
 import "../src/MyDanPass.sol";
 import "./mocks/MockERC20.sol";
+import "./MyDanDefi.setup.t.sol";
 
-contract MyDanDefiTest is Test {
+contract MyDanDefiTest is Test, MyDanDefiTestSetup {
     using LowerCaseConverter for string;
-    MyDanDefi myDanDefi;
-    MyDanPass myDanPass;
-    address deadAddress = 0x000000000000000000000000000000000000dEaD;
-    MockERC20 mockERC20 = new MockERC20();
-
-    constructor() {
-        MyDanDefi myDanDefiImpl = new MyDanDefi();
-        MyDanDefiProxy myDanDefiProxy = new MyDanDefiProxy(address(myDanDefiImpl), abi.encodeWithSelector(myDanDefiImpl.initialize.selector, address(mockERC20)));
-        myDanDefi = MyDanDefi(address(myDanDefiProxy));
-        myDanPass = myDanDefi.myDanPass();
-    }
+    using Strings for uint256;
 
     function testDeploy() external {
         assertEq(myDanPass.minter(), address(myDanDefi));

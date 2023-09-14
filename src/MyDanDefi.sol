@@ -433,4 +433,6 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
         }
         revert InvalidArgument(depositSum, "No membership tier found");
     }
+
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 }
