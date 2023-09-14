@@ -1,16 +1,22 @@
 pragma solidity ^0.8.10;
+import "openzeppelin-contracts-upgradeable/contracts/proxy/utils/UUPSUpgradeable.sol";
+import "openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
+import "openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.sol";
 import "openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "./MyDanDefiStorage.sol";
 import "./utils/LowerCaseConverter.sol";
 import "./utils/MyDanDefiUtility.sol";
 import "./IERC20Expanded.sol";
 
-contract MyDanDefi is MyDanDefiUtility, Ownable, ReentrancyGuard, MyDanDefiStorage {
+contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard, MyDanDefiUtility, MyDanDefiStorage {
     string public constant genesisReferralCode = "mydandefi";
     uint256 public constant genesisTokenId = 0;
     using LowerCaseConverter for string;
 
-    constructor(address _targetToken) {
+    constructor() initializer {}
+
+    function initialize(address _targetToken) public initializer {
+        __Ownable_init();
         targetToken = _targetToken;
         // set minter to address(this) and transfer ownership to deployer
         myDanPass = new MyDanPass(address(this));

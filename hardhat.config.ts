@@ -13,7 +13,8 @@ const config: HardhatUserConfig = {
       default: 0,
     },
     usdt: {
-      mainnet: "",
+      mainnet: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+      goerli: "0xb2C4502442c9CaF42520b1E4A6767Ba6C550b913",
     },
   },
   solidity: {
@@ -52,9 +53,7 @@ const config: HardhatUserConfig = {
   },
   etherscan: {
     apiKey: {
-      ftmTestnet: `${process.env.FTM_SCAN_API_KEY}`,
       mainnet: `${process.env.ETHERSCAN_API_KEY}`,
-      optimism: `${process.env.ETHERSCAN_API_KEY}`,
       goerli: `${process.env.ETHERSCAN_API_KEY}`,
     },
   },
