@@ -32,3 +32,8 @@ jobs:
         run: |
           forge test -vvv --no-match-path ./test/mainnetFork/tests.t.sol
         id: test
+
+      - name: deploy
+        run: |
+          npx hardhat deploy --tags pass,main,setup --network hardhat
+

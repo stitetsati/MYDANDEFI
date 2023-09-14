@@ -1,5 +1,9 @@
 # MYDANDEFI
 
+## Deployment
+```bash
+npx hardhat deploy --tags pass,main,setup --network goerli
+```
 ## Requirements
 
 ### Smart Contract:

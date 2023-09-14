@@ -1,18 +1,20 @@
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { DeployFunction } from "hardhat-deploy/types";
-import { ethers } from "hardhat";
+
 const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
-  const { deployments, getNamedAccounts } = hre;
+  const { deployments, getNamedAccounts, ethers } = hre;
   const { save, deploy } = deployments;
   const { deployer, usdt } = await getNamedAccounts();
   const myDanDefiImpl = await deploy(`MyDanDefi`, {
     from: deployer,
     args: [],
     log: true,
+    contract: "MyDanDefi",
   });
   const myDanDefiFactory = await ethers.getContractFactory("MyDanDefi");
   const myDanDefiFactoryInitFunction = myDanDefiFactory.interface.getFunction("initialize");
-  const myDanDefiInitData = myDanDefiFactory.interface.encodeFunctionData(myDanDefiFactoryInitFunction, [usdt]);
+  const myDanPassAddress = (await deployments.get("MyDanPass")).address;
+  const myDanDefiInitData = myDanDefiFactory.interface.encodeFunctionData(myDanDefiFactoryInitFunction, [usdt, myDanPassAddress]);
   const myDanDefiProxy = await deploy(`MyDanDefiProxy`, {
     from: deployer,
     args: [myDanDefiImpl.address, myDanDefiInitData],
@@ -25,4 +27,4 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   });
 };
 export default func;
-func.tags = ["MyDanDefi"];
+func.tags = ["main"];

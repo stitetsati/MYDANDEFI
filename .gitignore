@@ -6,3 +6,4 @@ out/
 artifacts/
 typechain-types/
 cache_hardhat/
+deployments/

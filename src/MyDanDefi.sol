@@ -1,30 +1,26 @@
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.10;
 import "openzeppelin-contracts-upgradeable/contracts/proxy/utils/UUPSUpgradeable.sol";
 import "openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
 import "openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.sol";
 import "openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "./MyDanDefiStorage.sol";
-import "./utils/LowerCaseConverter.sol";
 import "./utils/MyDanDefiUtility.sol";
 import "./IERC20Expanded.sol";
 
 contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard, MyDanDefiUtility, MyDanDefiStorage {
     string public constant genesisReferralCode = "mydandefi";
     uint256 public constant genesisTokenId = 0;
-    using LowerCaseConverter for string;
 
     constructor() initializer {}
 
-    function initialize(address _targetToken) public initializer {
+    function initialize(address _targetToken, address _myDanPass) public initializer {
         __Ownable_init();
         targetToken = _targetToken;
-        // set minter to address(this) and transfer ownership to deployer
-        myDanPass = new MyDanPass(address(this));
-        myDanPass.transferOwnership(msg.sender);
+        myDanPass = IMyDanPass(_myDanPass);
         // mint a genesis nft and set up the profile
-        uint256 tokenId = myDanPass.mint(msg.sender);
-        referralCodes[genesisReferralCode] = tokenId;
-        profiles[tokenId] = Profile({referrerTokenId: tokenId, referralCode: genesisReferralCode, depositSum: 0, membershipTier: 0, isInitialised: true});
+        referralCodes[genesisReferralCode] = genesisTokenId;
+        profiles[genesisTokenId] = Profile({referrerTokenId: genesisTokenId, referralCode: genesisReferralCode, depositSum: 0, membershipTier: 0, isInitialised: true});
     }
 
     /**********************************/
@@ -41,7 +37,7 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
 
     function setAssetsUnderManagementCap(uint256 newCap) external onlyOwner {
         if (newCap == 0) {
-            revert InvalidArgument(newCap, "Cap cannot be zero");
+            revert InvalidArgument(newCap);
         }
         assetsUnderManagementCap = newCap;
         emit AssetsUnderManagementCapSet(newCap);
@@ -50,10 +46,10 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
     function editMembershipTier(uint256 i, MembershipTier calldata updatedMembershipTier) external onlyOwner {
         // TODO: check reward calc impact
         if (updatedMembershipTier.interestRate == 0) {
-            revert InvalidArgument(updatedMembershipTier.interestRate, "Rate cannot be zero");
+            revert InvalidArgument(updatedMembershipTier.interestRate);
         }
         if (i >= membershipTiers.length) {
-            revert InvalidArgument(i, "Index out of bounds");
+            revert InvalidArgument(i);
         }
         membershipTiers[i] = updatedMembershipTier;
         emit MembershipUpdated(i, updatedMembershipTier);
@@ -61,14 +57,14 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
 
     function setDurations(uint256[] calldata durations, uint256[] calldata bonusRates) external onlyOwner {
         if (durations.length != bonusRates.length) {
-            revert InvalidArgument(durations.length, "Durations length does not match bonus rates length");
+            revert InvalidArgument(durations.length);
         }
         for (uint256 i = 0; i < durations.length; i++) {
             if (durations[i] == 0) {
-                revert InvalidArgument(durations[i], "Duration cannot be zero");
+                revert InvalidArgument(durations[i]);
             }
             if (i > 0 && durations[i] <= durations[i - 1]) {
-                revert InvalidArgument(durations[i], "Duration must be increasing");
+                revert InvalidArgument(durations[i]);
             }
             durationBonusRates[durations[i]] = bonusRates[i];
             emit DurationBonusRateUpdated(durations[i], bonusRates[i]);
@@ -85,7 +81,7 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
 
     function setReferralBonusRates(uint256[] calldata rates) external onlyOwner {
         if (rates[0] != 0) {
-            revert InvalidArgument(rates[0], "First rate must be zero");
+            revert InvalidArgument(rates[0]);
         }
         delete referralBonusRates;
         referralBonusRates = rates;
@@ -100,12 +96,12 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
     /**********************************/
 
     function claimPass(string memory referralCode) external nonReentrant returns (uint256) {
-        string memory lowerCaseReferralCode = referralCode.toLowerCase();
+        string memory lowerCaseReferralCode = toLowerCase(referralCode);
         uint256 referrerTokenId = genesisTokenId;
         if (keccak256(abi.encodePacked(lowerCaseReferralCode)) != keccak256(abi.encodePacked(genesisReferralCode))) {
             referrerTokenId = referralCodes[lowerCaseReferralCode];
             if (referrerTokenId == genesisTokenId) {
-                revert InvalidStringArgument(referralCode, "Referral code does not exist");
+                revert InvalidStringArgument();
             }
         }
         uint256 mintedTokenId = myDanPass.mint(msg.sender);
@@ -118,16 +114,16 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
         if (msg.sender != myDanPass.ownerOf(tokenId)) {
             revert NotTokenOwner(tokenId, msg.sender, myDanPass.ownerOf(tokenId));
         }
-        string memory lowerCaseReferralCode = referralCode.toLowerCase();
+        string memory lowerCaseReferralCode = toLowerCase(referralCode);
         // != generis, cant be used already, not set already for this token Id
         if (keccak256(abi.encodePacked(lowerCaseReferralCode)) == keccak256(abi.encodePacked(genesisReferralCode))) {
-            revert InvalidStringArgument(referralCode, "Referral code cannot be genesis referral code");
+            revert InvalidStringArgument();
         }
         if (referralCodes[lowerCaseReferralCode] != genesisTokenId) {
-            revert InvalidStringArgument(referralCode, "Referral code already used by other tokenId");
+            revert InvalidStringArgument();
         }
         if (bytes(profiles[tokenId].referralCode).length != 0) {
-            revert InvalidArgument(tokenId, "Referral code already set");
+            revert InvalidArgument(tokenId);
         }
         referralCodes[lowerCaseReferralCode] = tokenId;
         profiles[tokenId].referralCode = lowerCaseReferralCode;
@@ -136,16 +132,16 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
 
     function deposit(uint256 tokenId, uint256 amount, uint256 duration) external nonReentrant returns (uint256) {
         if (amount < 10 ** IERC20Expanded(targetToken).decimals()) {
-            revert InvalidArgument(amount, "Amount must be at least 1");
+            revert InvalidArgument(amount);
         }
         if (currentAUM + amount > assetsUnderManagementCap) {
-            revert InvalidArgument(amount, "Amount exceeds cap");
+            revert InvalidArgument(amount);
         }
         if (!isValidDepositDuration(duration)) {
-            revert InvalidArgument(duration, "Invalid deposit duration");
+            revert InvalidArgument(duration);
         }
         if (!profiles[tokenId].isInitialised) {
-            revert InvalidArgument(tokenId, "Token Id does not exist");
+            revert InvalidArgument(tokenId);
         }
         currentAUM += amount;
         Profile storage profile = profiles[tokenId];
@@ -160,14 +156,14 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
 
     function collectInterests(uint256 tokenId, uint256[] calldata depositIds) external nonReentrant returns (uint256) {
         if (!profiles[tokenId].isInitialised) {
-            revert InvalidArgument(tokenId, "Token Id does not exist");
+            revert InvalidArgument(tokenId);
         }
         return _collectInterests(tokenId, depositIds);
     }
 
     function withdraw(uint256 tokenId, uint256[] calldata depositIds) external nonReentrant returns (uint256) {
         if (!profiles[tokenId].isInitialised) {
-            revert InvalidArgument(tokenId, "Token Id does not exist");
+            revert InvalidArgument(tokenId);
         }
 
         uint256 interestClaimed = _collectInterests(tokenId, depositIds);
@@ -177,7 +173,7 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
         for (uint256 i = 0; i < depositIds.length; i++) {
             Deposit memory currentDeposit = deposits[tokenId][depositIds[i]];
             if (currentDeposit.maturity == 0) {
-                revert InvalidArgument(depositIds[i], "Deposit does not exist");
+                revert InvalidArgument(depositIds[i]);
             }
             if (currentDeposit.maturity > block.timestamp) {
                 revert NotWithdrawable(tokenId, depositIds[i], currentDeposit.maturity);
@@ -199,7 +195,7 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
 
     function claimReferralBonus(uint256 tokenId, uint256[] calldata referralBonusIds) external nonReentrant returns (uint256) {
         if (!profiles[tokenId].isInitialised) {
-            revert InvalidArgument(tokenId, "Token Id does not exist");
+            revert InvalidArgument(tokenId);
         }
         address receiver = myDanPass.ownerOf(tokenId);
         uint256 totalReward = 0;
@@ -244,7 +240,7 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
 
     function sendToken(address token, address to, uint256 value) internal {
         if (IERC20Expanded(token).balanceOf(address(this)) < value) {
-            revert InvalidArgument(value, "Not enough token balance");
+            revert InvalidArgument(value);
         }
         IERC20Expanded(token).transfer(to, value);
     }
@@ -431,7 +427,7 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
                 return (i, membershipTiers[i].interestRate);
             }
         }
-        revert InvalidArgument(depositSum, "No membership tier found");
+        revert InvalidArgument(depositSum);
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
