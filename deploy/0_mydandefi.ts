@@ -8,7 +8,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const myDanDefiImpl = await deploy(`MyDanDefi`, {
     from: deployer,
     args: [],
-    log: true
+    log: true,
   });
   const myDanDefiFactory = await ethers.getContractFactory("MyDanDefi");
   const myDanDefiFactoryInitFunction = myDanDefiFactory.interface.getFunction("initialize");
