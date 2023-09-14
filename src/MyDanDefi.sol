@@ -175,15 +175,15 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
         uint256 withdrawnPrincipal = 0;
 
         for (uint256 i = 0; i < depositIds.length; i++) {
-            Deposit memory deposit = deposits[tokenId][depositIds[i]];
-            if (deposit.maturity == 0) {
+            Deposit memory currentDeposit = deposits[tokenId][depositIds[i]];
+            if (currentDeposit.maturity == 0) {
                 revert InvalidArgument(depositIds[i], "Deposit does not exist");
             }
-            if (deposit.maturity > block.timestamp) {
-                revert NotWithdrawable(tokenId, depositIds[i], deposit.maturity);
+            if (currentDeposit.maturity > block.timestamp) {
+                revert NotWithdrawable(tokenId, depositIds[i], currentDeposit.maturity);
             }
-            withdrawnPrincipal += deposit.principal;
-            emit DepositWithdrawn(tokenId, depositIds[i], deposit.principal);
+            withdrawnPrincipal += currentDeposit.principal;
+            emit DepositWithdrawn(tokenId, depositIds[i], currentDeposit.principal);
             delete deposits[tokenId][depositIds[i]];
         }
         if (withdrawnPrincipal == 0) {
@@ -337,9 +337,9 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
         address receiver = myDanPass.ownerOf(tokenId);
         uint256 totalInterest = 0;
         for (uint256 i = 0; i < depositIds.length; i++) {
-            Deposit memory deposit = deposits[tokenId][depositIds[i]];
+            Deposit memory currentDeposit = deposits[tokenId][depositIds[i]];
             uint256 interestCollectable = _calculateInterests(tokenId, depositIds[i]);
-            deposits[tokenId][depositIds[i]].interestCollected = deposit.interestCollected + interestCollectable;
+            deposits[tokenId][depositIds[i]].interestCollected = currentDeposit.interestCollected + interestCollectable;
             deposits[tokenId][depositIds[i]].lastClaimedAt = block.timestamp;
             emit InterestClaimed(tokenId, depositIds[i], interestCollectable);
             totalInterest += interestCollectable;
@@ -349,15 +349,15 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
     }
 
     function _calculateInterests(uint256 tokenId, uint256 depositId) internal view returns (uint256) {
-        Deposit memory deposit = deposits[tokenId][depositId];
-        if (deposit.interestCollected == deposit.interestReceivable || deposit.principal == 0) {
+        Deposit memory currentDeposit = deposits[tokenId][depositId];
+        if (currentDeposit.interestCollected == currentDeposit.interestReceivable || currentDeposit.principal == 0) {
             return 0;
         }
-        uint256 durationPassed = block.timestamp - max(deposit.lastClaimedAt, deposit.startTime);
+        uint256 durationPassed = block.timestamp - max(currentDeposit.lastClaimedAt, currentDeposit.startTime);
         // TODO: check dust precision
-        uint256 interestCollectible = (deposit.interestReceivable * durationPassed) / (deposit.maturity - deposit.startTime);
-        if (interestCollectible + deposit.interestCollected > deposit.interestReceivable) {
-            interestCollectible = deposit.interestReceivable - deposit.interestCollected;
+        uint256 interestCollectible = (currentDeposit.interestReceivable * durationPassed) / (currentDeposit.maturity - currentDeposit.startTime);
+        if (interestCollectible + currentDeposit.interestCollected > currentDeposit.interestReceivable) {
+            interestCollectible = currentDeposit.interestReceivable - currentDeposit.interestCollected;
         }
         return interestCollectible;
     }
