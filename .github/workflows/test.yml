@@ -2,9 +2,9 @@ name: test
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 env:
   FOUNDRY_PROFILE: ci
@@ -27,12 +27,6 @@ jobs:
           version: nightly
       - name: Install Dependencies
         run: npm install
-
-      - name: Run Forge build
-        run: |
-          forge --version
-          forge build --sizes
-        id: build
 
       - name: Run Forge tests
         run: |

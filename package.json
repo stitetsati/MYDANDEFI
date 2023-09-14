@@ -5,7 +5,8 @@
     "devDependencies": {
         "@nomicfoundation/hardhat-foundry": "^1.0.1",
         "@nomicfoundation/hardhat-verify": "^1.0.0",
-        "@typechain/hardhat": "^6.1.5",
+        "@openzeppelin/hardhat-upgrades": "^2.2.1",
+        "@typechain/hardhat": "^9.0.0",
         "dotenv": "^16.0.3",
         "hardhat": "^2.14.0",
         "hardhat-deploy": "^0.11.26",
