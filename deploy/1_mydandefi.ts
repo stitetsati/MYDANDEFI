@@ -21,7 +21,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     log: true,
     contract: "MyDanDefiProxy",
   });
-  await save(`MyDanDefiProxy`, {
+  await save(`MyDanDefi`, {
     abi: myDanDefiImpl.abi,
     address: myDanDefiProxy.address,
   });

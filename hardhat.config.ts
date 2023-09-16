@@ -15,8 +15,8 @@ const config: HardhatUserConfig = {
     },
     usdt: {
       mainnet: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
-      goerli: "0xb2C4502442c9CaF42520b1E4A6767Ba6C550b913",
-      hardhat: "0xb2C4502442c9CaF42520b1E4A6767Ba6C550b913",
+      goerli: "0xfa873c8A5C5F93c6BFac672df089FADc17127b73",
+      hardhat: "0xfa873c8A5C5F93c6BFac672df089FADc17127b73",
     },
   },
   solidity: {
