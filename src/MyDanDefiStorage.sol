@@ -19,6 +19,7 @@ interface IMyDanDefi {
     event ReferralBonusLevelCollectionActivated(uint256 tokenId, uint256 referralLevel, uint256 logIndex, uint256 timestamp);
     event ReferralBonusLevelCollectionDeactivated(uint256 tokenId, uint256 referralLevel, uint256 logIndex, uint256 timestamp);
     event DepositWithdrawn(uint256 tokenId, uint256 depositId, uint256 principal);
+    event ReferralBonusRateUpdated(uint256 referralLevel, uint256 bonusRate);
     struct MembershipTier {
         string name;
         uint256 lowerThreshold;

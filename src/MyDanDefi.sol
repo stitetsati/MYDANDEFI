@@ -83,6 +83,13 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
         if (rates[0] != 0) {
             revert InvalidArgument(rates[0]);
         }
+        for (uint256 i = 1; i < rates.length; i++) {
+            if (i == 0 && rates[i] != 0) {
+                // referrla level 0's referralBonusRate has to be 0
+                revert InvalidArgument(rates[i]);
+            }
+            emit ReferralBonusRateUpdated(i, rates[i]);
+        }
         delete referralBonusRates;
         referralBonusRates = rates;
     }
