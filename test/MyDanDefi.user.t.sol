@@ -12,7 +12,7 @@ import "openzeppelin-contracts/contracts/utils/Strings.sol";
 
 contract MyDanDefiTest is Test, MyDanDefiTestSetup {
     using Strings for uint256;
-    event ReferralRewardCreated(uint256 referrerTokenId, uint256 referralBonusId, uint256 referralLevel);
+    event ReferralBonusCreated(uint256 referrerTokenId, uint256 referralBonusId, uint256 referralLevel);
     event ReferralBonusLevelCollectionDeactivated(uint256 tokenId, uint256 referralLevel, uint256 logIndex, uint256 timestamp);
 
     function testClaimPass() external Setup {
@@ -142,7 +142,7 @@ contract MyDanDefiTest is Test, MyDanDefiTestSetup {
         }
         {
             (uint256 referralLevel, uint256 referralStartTime, uint256 referralMaturity, uint256 referralBonusReceivable, uint256 rewardClaimed, uint256 lastClaimedAt, uint256 depositId) = myDanDefi
-                .referralRewards(referrerTokenId, 0);
+                .referralBonuses(referrerTokenId, 0);
             assertEq(referralLevel, 1);
             assertEq(referralStartTime, block.timestamp);
             assertEq(referralMaturity, block.timestamp + validDuration);
@@ -174,7 +174,7 @@ contract MyDanDefiTest is Test, MyDanDefiTestSetup {
         }
         {
             (uint256 referralLevel, uint256 referralStartTime, uint256 referralMaturity, uint256 referralBonusReceivable, uint256 rewardClaimed, uint256 lastClaimedAt, uint256 depositId) = myDanDefi
-                .referralRewards(referrerTokenId, 0);
+                .referralBonuses(referrerTokenId, 0);
             assertEq(referralLevel, 1);
             assertEq(referralStartTime, block.timestamp);
             assertEq(referralMaturity, block.timestamp + validDuration);
@@ -261,7 +261,7 @@ contract MyDanDefiTest is Test, MyDanDefiTestSetup {
 
         for (uint256 i = 1; i < referralBonusMaxLevel; i++) {
             vm.expectEmit(false, false, false, true);
-            emit ReferralRewardCreated(referralBonusMaxLevel - (i), i - 1, i);
+            emit ReferralBonusCreated(referralBonusMaxLevel - (i), i - 1, i);
         }
         myDanDefi.deposit(tokenId, testAmount, validDuration);
     }
@@ -402,18 +402,18 @@ contract MyDanDefiTest is Test, MyDanDefiTestSetup {
         // total activation days = 90 + 100 = 190
         uint256 totalReward = (testAmount * 600) / 10000;
         // this takes into the 10 extra days becoz the user hasnt been downgraded due to withdrawal.
-        uint256 expectedReferralReward = (totalReward * 280) / 365;
+        uint256 expectedReferralBonus = (totalReward * 280) / 365;
         uint256[] memory referralBonusIds = new uint256[](1);
         referralBonusIds[0] = 0;
         uint256 calculatedReferralBonus = myDanDefi.getClaimableReferralBonus(genesisTokenId, referralBonusIds);
         uint256 receivedReferralBonus = myDanDefi.claimReferralBonus(genesisTokenId, referralBonusIds);
-        assertEq(calculatedReferralBonus, expectedReferralReward);
-        assertEq(receivedReferralBonus, expectedReferralReward);
+        assertEq(calculatedReferralBonus, expectedReferralBonus);
+        assertEq(receivedReferralBonus, expectedReferralBonus);
         {
-            (uint256 referralLevel, , , uint256 referralBonusReceivable, uint256 rewardClaimed, uint256 lastClaimedAt, uint256 contributorDepositId) = myDanDefi.referralRewards(0, 0);
+            (uint256 referralLevel, , , uint256 referralBonusReceivable, uint256 rewardClaimed, uint256 lastClaimedAt, uint256 contributorDepositId) = myDanDefi.referralBonuses(0, 0);
             assertEq(referralLevel, 1);
             assertEq(referralBonusReceivable, totalReward);
-            assertEq(rewardClaimed, expectedReferralReward);
+            assertEq(rewardClaimed, expectedReferralBonus);
             assertEq(lastClaimedAt, block.timestamp);
             assertEq(contributorDepositId, 0);
         }

@@ -10,7 +10,7 @@ interface IMyDanDefi {
     event DurationBonusRateUpdated(uint256 duration, uint256 newRate);
     event PassMinted(address minter, uint256 mintedTokenId, uint256 referrerTokenId);
     event ReferralCodeCreated(string referralCode, uint256 tokenId);
-    event ReferralRewardCreated(uint256 referrerTokenId, uint256 referralBonusId, uint256 referralLevel);
+    event ReferralBonusCreated(uint256 referrerTokenId, uint256 referralBonusId, uint256 referralLevel);
     event DepositCreated(uint256 tokenId, uint256 depositId, uint256 amount, uint256 duration, uint256 interestRate, uint256 interestReceivable);
     event MembershipTierChanged(uint256 tokenId, uint256 membershipTierIndex);
     event InterestClaimed(uint256 tokenId, uint256 depositId, uint256 interestCollectible);
@@ -37,7 +37,7 @@ interface IMyDanDefi {
         uint256 interestCollected;
         uint256 lastClaimedAt;
     }
-    struct ReferralReward {
+    struct ReferralBonus {
         uint256 referralLevel;
         uint256 startTime;
         uint256 maturity;
@@ -88,7 +88,7 @@ abstract contract MyDanDefiStorage is IMyDanDefi {
     uint256 public assetsUnderManagementCap;
     uint256 public currentAUM;
     uint256 public nextDepositId;
-    uint256 public nextReferralRewardId;
+    uint256 public nextReferralBonusId;
     IMyDanPass public myDanPass;
     uint256[] public referralBonusRates;
     MembershipTier[] public membershipTiers;
@@ -98,8 +98,8 @@ abstract contract MyDanDefiStorage is IMyDanDefi {
     mapping(uint256 => Profile) public profiles;
     // tokenId -> depositId -> Deposit
     mapping(uint256 => mapping(uint256 => Deposit)) public deposits;
-    // tokenId -> referralRewardId -> ReferralReward
-    mapping(uint256 => mapping(uint256 => ReferralReward)) public referralRewards;
-    // tokenId -> referralLevel -> referralRewardId[]
+    // tokenId -> referralBonusId -> ReferralBonus
+    mapping(uint256 => mapping(uint256 => ReferralBonus)) public referralBonuses;
+    // tokenId -> referralLevel -> referralBonusId[]
     mapping(uint256 => mapping(uint256 => TierActivationLog[])) public tierActivationLogs;
 }
