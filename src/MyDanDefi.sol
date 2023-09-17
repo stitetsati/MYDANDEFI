@@ -237,6 +237,24 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
         return totalInterests;
     }
 
+    function getAllReferrers(uint256 tokenId) public view returns (uint256[] memory) {
+        // ignore level 0
+        uint256 totalReferralLevels = referralBonusRates.length - 1;
+        uint256[] memory referrers = new uint256[](totalReferralLevels);
+        uint256 referrerTokenId = profiles[tokenId].referrerTokenId;
+        if (tokenId == genesisTokenId) {
+            return referrers;
+        }
+        for (uint256 i = 1; i < totalReferralLevels; i++) {
+            referrers[i] = referrerTokenId;
+            if (referrerTokenId == genesisTokenId) {
+                break;
+            }
+            referrerTokenId = profiles[referrerTokenId].referrerTokenId;
+        }
+        return referrers;
+    }
+
     /**********************************/
     /**********************************/
     /*****                       ******/
@@ -259,8 +277,8 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
             uint256 referralBonusId = referralBonusIds[i];
             uint256 claimableReward = calculateClaimableReferralBonus(tokenId, referralBonusId);
             if (claimableReward > 0) {
-                referralRewards[tokenId][referralBonusId].lastClaimedAt = block.timestamp;
-                referralRewards[tokenId][referralBonusId].rewardClaimed += claimableReward;
+                referralBonuses[tokenId][referralBonusId].lastClaimedAt = block.timestamp;
+                referralBonuses[tokenId][referralBonusId].rewardClaimed += claimableReward;
                 totalReward += claimableReward;
                 emit ReferralBonusClaimed(tokenId, referralBonusId, claimableReward);
             }
@@ -269,7 +287,7 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
     }
 
     function calculateClaimableReferralBonus(uint256 tokenId, uint256 referralBonusId) private view returns (uint256) {
-        ReferralReward storage reward = referralRewards[tokenId][referralBonusId];
+        ReferralBonus storage reward = referralBonuses[tokenId][referralBonusId];
         if (reward.rewardClaimed == reward.referralBonusReceivable) {
             return 0;
         }
@@ -404,9 +422,9 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
             if (referralBonusReceivable == 0) {
                 continue;
             }
-            uint256 referralBonusId = nextReferralRewardId;
-            nextReferralRewardId += 1;
-            referralRewards[referrerTokenId][referralBonusId] = ReferralReward({
+            uint256 referralBonusId = nextReferralBonusId;
+            nextReferralBonusId += 1;
+            referralBonuses[referrerTokenId][referralBonusId] = ReferralBonus({
                 referralLevel: referralLevel,
                 startTime: block.timestamp,
                 maturity: block.timestamp + duration,
@@ -417,7 +435,7 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
             });
             // next iteration
 
-            emit ReferralRewardCreated(referrerTokenId, referralBonusId, referralLevel);
+            emit ReferralBonusCreated(referrerTokenId, referralBonusId, referralLevel, depositId);
             uint256 nextReferrerTokenId = profiles[referrerTokenId].referrerTokenId;
 
             if (nextReferrerTokenId == referrerTokenId) {
