@@ -237,6 +237,24 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
         return totalInterests;
     }
 
+    function getAllReferrers(uint256 tokenId) public view returns (uint256[] memory) {
+        // ignore level 0
+        uint256 totalReferralLevels = referralBonusRates.length - 1;
+        uint256[] memory referrers = new uint256[](totalReferralLevels);
+        uint256 referrerTokenId = profiles[tokenId].referrerTokenId;
+        if (tokenId == genesisTokenId) {
+            return referrers;
+        }
+        for (uint256 i = 1; i < totalReferralLevels; i++) {
+            referrers[i] = referrerTokenId;
+            if (referrerTokenId == genesisTokenId) {
+                break;
+            }
+            referrerTokenId = profiles[referrerTokenId].referrerTokenId;
+        }
+        return referrers;
+    }
+
     /**********************************/
     /**********************************/
     /*****                       ******/
@@ -417,7 +435,7 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
             });
             // next iteration
 
-            emit ReferralBonusCreated(referrerTokenId, referralBonusId, referralLevel);
+            emit ReferralBonusCreated(referrerTokenId, referralBonusId, referralLevel, depositId);
             uint256 nextReferrerTokenId = profiles[referrerTokenId].referrerTokenId;
 
             if (nextReferrerTokenId == referrerTokenId) {

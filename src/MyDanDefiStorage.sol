@@ -10,7 +10,7 @@ interface IMyDanDefi {
     event DurationBonusRateUpdated(uint256 duration, uint256 newRate);
     event PassMinted(address minter, uint256 mintedTokenId, uint256 referrerTokenId);
     event ReferralCodeCreated(string referralCode, uint256 tokenId);
-    event ReferralBonusCreated(uint256 referrerTokenId, uint256 referralBonusId, uint256 referralLevel);
+    event ReferralBonusCreated(uint256 referrerTokenId, uint256 referralBonusId, uint256 referralLevel, uint256 depositId);
     event DepositCreated(uint256 tokenId, uint256 depositId, uint256 amount, uint256 duration, uint256 interestRate, uint256 interestReceivable);
     event MembershipTierChanged(uint256 tokenId, uint256 membershipTierIndex);
     event InterestClaimed(uint256 tokenId, uint256 depositId, uint256 interestCollectible);

@@ -12,7 +12,7 @@ import "openzeppelin-contracts/contracts/utils/Strings.sol";
 
 contract MyDanDefiTest is Test, MyDanDefiTestSetup {
     using Strings for uint256;
-    event ReferralBonusCreated(uint256 referrerTokenId, uint256 referralBonusId, uint256 referralLevel);
+    event ReferralBonusCreated(uint256 referrerTokenId, uint256 referralBonusId, uint256 referralLevel, uint256 depositId);
     event ReferralBonusLevelCollectionDeactivated(uint256 tokenId, uint256 referralLevel, uint256 logIndex, uint256 timestamp);
 
     function testClaimPass() external Setup {
@@ -261,9 +261,11 @@ contract MyDanDefiTest is Test, MyDanDefiTestSetup {
 
         for (uint256 i = 1; i < referralBonusMaxLevel; i++) {
             vm.expectEmit(false, false, false, true);
-            emit ReferralBonusCreated(referralBonusMaxLevel - (i), i - 1, i);
+            emit ReferralBonusCreated(referralBonusMaxLevel - (i), i - 1, i, 0);
         }
         myDanDefi.deposit(tokenId, testAmount, validDuration);
+        uint256[] memory allReferrers = myDanDefi.getAllReferrers(tokenId);
+        assertEq(allReferrers.length, referralBonusMaxLevel - 1);
     }
 
     function testClaimInterests() external Setup {
