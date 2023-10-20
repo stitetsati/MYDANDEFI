@@ -67,9 +67,9 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
                 revert InvalidArgument(durations[i]);
             }
             durationBonusRates[durations[i]] = bonusRates[i];
+            depositDurations.push(durations[i]);
             emit DurationBonusRateUpdated(durations[i], bonusRates[i]);
         }
-        depositDurations = durations;
     }
 
     function insertMembershipTiers(MembershipTier[] calldata newMembershipTiers) external onlyOwner {
@@ -266,6 +266,9 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
     function sendToken(address token, address to, uint256 value) internal {
         if (IERC20Expanded(token).balanceOf(address(this)) < value) {
             revert InvalidArgument(value);
+        }
+        if (value == 0) {
+            return;
         }
         IERC20Expanded(token).transfer(to, value);
     }

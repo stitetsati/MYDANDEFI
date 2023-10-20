@@ -8,6 +8,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const myDanDefiProxyAddress = (await deployments.get("MyDanDefiProxy")).address;
   var tx = await execute("MyDanPass", { from: deployer, gasLimit: 1000000 }, "setMinter", myDanDefiProxyAddress);
   console.log(`setMinter ${tx.transactionHash}`);
+  // mainnet
   const month = 30 * 24 * 60 * 60;
   const year = 365 * 24 * 60 * 60;
   const durations = [3 * month, 6 * month, 9 * month, 1 * year, 2 * year, 3 * year];
