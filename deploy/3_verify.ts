@@ -33,7 +33,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   await hre.run("verify:verify", {
     address: myDanDefiProxyAddress,
     constructorArguments: [myDanDefiAddress, myDanDefiInitData],
-    contract:"src/MyDanDefiProxy.sol:MyDanDefiProxy"
+    contract: "src/MyDanDefiProxy.sol:MyDanDefiProxy",
   });
 };
 export default func;
