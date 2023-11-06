@@ -24,7 +24,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   ];
   tx = await execute("MyDanDefiProxy", { from: deployer, gasLimit: 1000000 }, "insertMembershipTiers", tiers);
   console.log(`insertMembershipTiers ${tx.transactionHash}`);
-  let assetUnderManagementCap = "115792089237316195423570985008687907853269984665640564039457584007913129639935";
+  let assetUnderManagementCap = "1000000000000000";
   tx = await execute("MyDanDefiProxy", { from: deployer, gasLimit: 1000000 }, "setAssetsUnderManagementCap", assetUnderManagementCap);
   console.log(`setAssetsUnderManagementCap ${tx.transactionHash}`);
   let referralBonusRates = [0, 600, 200, 200, 100, 100, 100, 100];
