@@ -6,7 +6,7 @@ import "openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.s
 import "openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "./MyDanDefiStorage.sol";
 import "./utils/MyDanDefiUtility.sol";
-import "./IERC20Expanded.sol";
+import "./IUSDT.sol";
 
 contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard, MyDanDefiUtility, MyDanDefiStorage {
     string public constant genesisReferralCode = "mydandefi";
@@ -138,7 +138,7 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
     }
 
     function deposit(uint256 tokenId, uint256 amount, uint256 duration) external nonReentrant returns (uint256) {
-        if (amount < 10 ** IERC20Expanded(targetToken).decimals()) {
+        if (amount < 10 ** IUSDT(targetToken).decimals()) {
             revert InvalidArgument(amount);
         }
         if (currentAUM + amount > assetsUnderManagementCap) {
@@ -157,7 +157,7 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
         handleMembershipTierUpdate(tokenId, profile, newMembershipTierIndex, profile.depositSum + amount);
         uint256 depositId = createDepositObject(tokenId, tierInterestRate, amount, duration);
         createReferralBonusObjects(tokenId, profile.referrerTokenId, depositId, amount, duration);
-        IERC20Expanded(targetToken).transferFrom(msg.sender, address(this), amount);
+        IUSDT(targetToken).transferFrom(msg.sender, address(this), amount);
         return depositId;
     }
 
@@ -264,13 +264,13 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
     /**********************************/
 
     function sendToken(address token, address to, uint256 value) internal {
-        if (IERC20Expanded(token).balanceOf(address(this)) < value) {
+        if (IUSDT(token).balanceOf(address(this)) < value) {
             revert InvalidArgument(value);
         }
         if (value == 0) {
             return;
         }
-        IERC20Expanded(token).transfer(to, value);
+        IUSDT(token).transfer(to, value);
     }
 
     function _claimReferralBonus(uint256 tokenId, uint256[] calldata referralBonusIds) internal returns (uint256) {
