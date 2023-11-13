@@ -22,6 +22,9 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     ["Emerald", 1000 * oneDollar, 10000 * oneDollar, 750, 4, 5],
     ["Imperial", 10000 * oneDollar, "115792089237316195423570985008687907853269984665640564039457584007913129639935", 800, 6, 7],
   ];
+  let uri = "ipfs://QmeLyorcnU4jFZ3tGpCsRQ5V85NezzFsJBvQS3hEHcZE5w/";
+  tx = await execute("MyDanPass", { from: deployer, gasLimit: 1000000 }, "setBaseURI", uri);
+  console.log(`setBaseURI ${tx.transactionHash}`);
   tx = await execute("MyDanDefiProxy", { from: deployer, gasLimit: 1000000 }, "insertMembershipTiers", tiers);
   console.log(`insertMembershipTiers ${tx.transactionHash}`);
   let assetUnderManagementCap = "1000000000000000";

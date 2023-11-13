@@ -6,7 +6,7 @@ import "openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.s
 import "openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "./MyDanDefiStorage.sol";
 import "./utils/MyDanDefiUtility.sol";
-import "./IUSDT.sol";
+import "./IBEP20.sol";
 
 contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard, MyDanDefiUtility, MyDanDefiStorage {
     string public constant genesisReferralCode = "mydandefi";
@@ -138,7 +138,7 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
     }
 
     function deposit(uint256 tokenId, uint256 amount, uint256 duration) external nonReentrant returns (uint256) {
-        if (amount < 10 ** IUSDT(targetToken).decimals()) {
+        if (amount < 10 ** IBEP20(targetToken).decimals()) {
             revert InvalidArgument(amount);
         }
         if (currentAUM + amount > assetsUnderManagementCap) {
@@ -157,7 +157,7 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
         handleMembershipTierUpdate(tokenId, profile, newMembershipTierIndex, profile.depositSum + amount);
         uint256 depositId = createDepositObject(tokenId, tierInterestRate, amount, duration);
         createReferralBonusObjects(tokenId, profile.referrerTokenId, depositId, amount, duration);
-        IUSDT(targetToken).transferFrom(msg.sender, address(this), amount);
+        IBEP20(targetToken).transferFrom(msg.sender, address(this), amount);
         return depositId;
     }
 
@@ -264,13 +264,13 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
     /**********************************/
 
     function sendToken(address token, address to, uint256 value) internal {
-        if (IUSDT(token).balanceOf(address(this)) < value) {
+        if (IBEP20(token).balanceOf(address(this)) < value) {
             revert InvalidArgument(value);
         }
         if (value == 0) {
             return;
         }
-        IUSDT(token).transfer(to, value);
+        IBEP20(token).transfer(to, value);
     }
 
     function _claimReferralBonus(uint256 tokenId, uint256[] calldata referralBonusIds) internal returns (uint256) {

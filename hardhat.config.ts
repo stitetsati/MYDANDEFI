@@ -17,6 +17,7 @@ const config: HardhatUserConfig = {
       mainnet: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
       goerli: "0xfa873c8A5C5F93c6BFac672df089FADc17127b73",
       hardhat: "0xfa873c8A5C5F93c6BFac672df089FADc17127b73",
+      bnb: "0x55d398326f99059ff775485246999027b3197955",
     },
   },
   solidity: {
@@ -52,12 +53,18 @@ const config: HardhatUserConfig = {
       url: `https://rpc.ankr.com/fantom_testnet`,
       accounts: [`${process.env.TEST_PRIVATE_KEY}`],
     },
+    bnb: {
+      url: "https://bsc-dataseed.binance.org/",
+      accounts: [`${process.env.MAINNET_PRIVATE_KEY}`],
+      gasPrice: 5000000000, // Gas price in wei (20 gwei in this example)
+    },
   },
   etherscan: {
     apiKey: {
       hardhat: "",
       mainnet: `${process.env.ETHERSCAN_API_KEY}`,
       goerli: `${process.env.ETHERSCAN_API_KEY}`,
+      bsc: `${process.env.BSC_API_KEY}`,
     },
   },
 };
