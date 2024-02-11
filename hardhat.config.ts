@@ -18,6 +18,7 @@ const config: HardhatUserConfig = {
       goerli: "0xfa873c8A5C5F93c6BFac672df089FADc17127b73",
       hardhat: "0xfa873c8A5C5F93c6BFac672df089FADc17127b73",
       bnb: "0x55d398326f99059ff775485246999027b3197955",
+      bnbTest: "0xb2C4502442c9CaF42520b1E4A6767Ba6C550b913",
     },
   },
   solidity: {
@@ -58,6 +59,11 @@ const config: HardhatUserConfig = {
       accounts: [`${process.env.MAINNET_PRIVATE_KEY}`],
       gasPrice: 5000000000, // Gas price in wei (20 gwei in this example)
     },
+    bnbTest: {
+      url: "https://data-seed-prebsc-1-s1.binance.org:8545/",
+      accounts: [`${process.env.TEST_PRIVATE_KEY}`],
+      gasPrice: 20000000000, // Gas price in wei (20 gwei in this example)
+    },
   },
   etherscan: {
     apiKey: {
@@ -65,6 +71,7 @@ const config: HardhatUserConfig = {
       mainnet: `${process.env.ETHERSCAN_API_KEY}`,
       goerli: `${process.env.ETHERSCAN_API_KEY}`,
       bsc: `${process.env.BSC_API_KEY}`,
+      bscTestnet: `${process.env.BSC_API_KEY}`,
     },
   },
 };

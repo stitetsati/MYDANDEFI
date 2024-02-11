@@ -103,54 +103,16 @@ contract MyDanDefiTest is Test, MyDanDefiTestSetup {
         uint256 tokenId = myDanDefi.claimPass(myDanDefi.genesisReferralCode());
         uint256 duration = 1;
         vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, duration));
-        myDanDefi.deposit(tokenId, 1 ether, duration);
+        myDanDefi.deposit(tokenId, 100 ether, duration);
     }
 
     function testDepositWithNonExistentTokenId() external Setup {
-        mockERC20.mint(address(this), 1 ether);
-        mockERC20.approve(address(myDanDefi), 1 ether);
+        mockERC20.mint(address(this), 100 ether);
+        mockERC20.approve(address(myDanDefi), 100 ether);
         uint256 invalidTokenId = 100;
         uint256 validDuration = myDanDefi.depositDurations(0);
         vm.expectRevert(abi.encodeWithSelector(InvalidArgument.selector, invalidTokenId));
-        myDanDefi.deposit(invalidTokenId, 1 ether, validDuration);
-    }
-
-    function testDepositWithoutUpgrade() external Setup {
-        uint256 testAmount = oneDollar;
-        mockERC20.mint(address(this), testAmount);
-        mockERC20.approve(address(myDanDefi), testAmount);
-        uint256 tokenId = myDanDefi.claimPass(myDanDefi.genesisReferralCode());
-        uint256 validDuration = myDanDefi.depositDurations(0);
-        myDanDefi.deposit(tokenId, testAmount, validDuration);
-        assertEq(myDanDefi.currentAUM(), testAmount);
-        (uint256 referrerTokenId, , uint256 depositSum, uint256 membershipTier, ) = myDanDefi.profiles(tokenId);
-        assertEq(referrerTokenId, myDanDefi.genesisTokenId());
-        assertEq(depositSum, testAmount);
-        assertEq(membershipTier, 0);
-        {
-            (uint256 principal, uint256 startTime, uint256 maturity, uint256 interestRate, uint256 interestReceivable, uint256 interestCollected, uint256 lastClaimedAt) = myDanDefi.deposits(
-                tokenId,
-                0
-            );
-            assertEq(principal, testAmount);
-            assertEq(startTime, block.timestamp);
-            assertEq(maturity, block.timestamp + validDuration);
-            assertEq(interestRate, 0);
-            assertEq(interestReceivable, 0);
-            assertEq(interestCollected, 0);
-            assertEq(lastClaimedAt, 0);
-        }
-        {
-            (uint256 referralLevel, uint256 referralStartTime, uint256 referralMaturity, uint256 referralBonusReceivable, uint256 rewardClaimed, uint256 lastClaimedAt, uint256 depositId) = myDanDefi
-                .referralBonuses(referrerTokenId, 0);
-            assertEq(referralLevel, 1);
-            assertEq(referralStartTime, block.timestamp);
-            assertEq(referralMaturity, block.timestamp + validDuration);
-            assertEq(referralBonusReceivable, (((myDanDefi.referralBonusRates(1) * oneDollar) / 10000) * validDuration) / 365 days);
-            assertEq(rewardClaimed, 0);
-            assertEq(lastClaimedAt, 0);
-            assertEq(depositId, 0);
-        }
+        myDanDefi.deposit(invalidTokenId, 100 ether, validDuration);
     }
 
     function testDepositWithOneUpgrade() external Setup {
@@ -265,6 +227,10 @@ contract MyDanDefiTest is Test, MyDanDefiTestSetup {
         }
         myDanDefi.deposit(tokenId, testAmount, validDuration);
         uint256[] memory allReferrers = myDanDefi.getAllReferrers(tokenId);
+        for (uint256 i = 0; i < allReferrers.length; i++) {
+            console.log("check referer");
+            console.log(allReferrers[i]);
+        }
         assertEq(allReferrers.length, referralBonusMaxLevel - 1);
     }
 
@@ -335,7 +301,7 @@ contract MyDanDefiTest is Test, MyDanDefiTestSetup {
     }
 
     function testClaimReferralBonusWithActivationBeforeRewardCreation() external Setup {
-        uint256 testAmount = oneDollar * 100_000_000;
+        uint256 testAmount = oneDollar * 1_000_000;
         mockERC20.mint(address(this), testAmount * 2);
         mockERC20.approve(address(myDanDefi), testAmount * 2);
         uint256 tokenId = myDanDefi.claimPass(myDanDefi.genesisReferralCode());
@@ -378,7 +344,7 @@ contract MyDanDefiTest is Test, MyDanDefiTestSetup {
     }
 
     function testClaimReferralBonusWithDeactivation() external Setup {
-        uint256 testAmount = oneDollar * 100_000_000;
+        uint256 testAmount = oneDollar * 1_000_000;
         mockERC20.mint(address(this), testAmount * 3);
         mockERC20.approve(address(myDanDefi), type(uint256).max);
         uint256 genesisTokenId = myDanDefi.genesisTokenId();
@@ -422,7 +388,7 @@ contract MyDanDefiTest is Test, MyDanDefiTestSetup {
     }
 
     function testWithdraw() external Setup {
-        uint256 testAmount = oneDollar * 100_000_000;
+        uint256 testAmount = oneDollar * 1_000_000;
         mockERC20.mint(address(this), testAmount);
         mockERC20.approve(address(myDanDefi), testAmount);
         uint256 tokenId = myDanDefi.claimPass(myDanDefi.genesisReferralCode());

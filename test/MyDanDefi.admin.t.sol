@@ -69,8 +69,8 @@ contract MyDanDefiTest is Test, MyDanDefiTestSetup {
             lowerThreshold: 1,
             upperThreshold: 100,
             interestRate: 1000,
-            referralBonusCollectibleLevelLowerBound: 1,
-            referralBonusCollectibleLevelUpperBound: 2
+            referralBonusCollectibleLevelLowerBound: 3,
+            referralBonusCollectibleLevelUpperBound: 5
         });
         myDanDefi.editMembershipTier(1, newTier);
         (string memory name, uint256 lowerThreshold, uint256 upperThreshold, uint256 interestRate, , ) = myDanDefi.membershipTiers(1);

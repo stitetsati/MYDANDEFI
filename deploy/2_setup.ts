@@ -15,19 +15,19 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const bonusRates = [0, 0, 0, 50, 75, 100];
   tx = await execute("MyDanDefiProxy", { from: deployer, gasLimit: 1000000 }, "setDurations", durations, bonusRates);
   console.log(`setDurations ${tx.transactionHash}`);
-  const oneDollar = 10 ** 6;
+  const oneDollar = BigInt(10) ** BigInt(18);
   let tiers = [
-    ["None", 0, 100 * oneDollar, 0, 0, 0],
-    ["Sapphire", 100 * oneDollar, 1000 * oneDollar, 700, 1, 3],
-    ["Emerald", 1000 * oneDollar, 10000 * oneDollar, 750, 4, 5],
-    ["Imperial", 10000 * oneDollar, "115792089237316195423570985008687907853269984665640564039457584007913129639935", 800, 6, 7],
+    ["None", 0, BigInt(100) * oneDollar, 0, 0, 0],
+    ["Sapphire", BigInt(100) * oneDollar, BigInt(1000) * oneDollar, 700, 1, 3],
+    ["Emerald", BigInt(1000) * oneDollar, BigInt(10000) * oneDollar, 750, 4, 5],
+    ["Imperial", BigInt(10000) * oneDollar, "115792089237316195423570985008687907853269984665640564039457584007913129639935", 800, 6, 7],
   ];
   let uri = "ipfs://QmeLyorcnU4jFZ3tGpCsRQ5V85NezzFsJBvQS3hEHcZE5w/";
   tx = await execute("MyDanPass", { from: deployer, gasLimit: 1000000 }, "setBaseURI", uri);
   console.log(`setBaseURI ${tx.transactionHash}`);
   tx = await execute("MyDanDefiProxy", { from: deployer, gasLimit: 1000000 }, "insertMembershipTiers", tiers);
   console.log(`insertMembershipTiers ${tx.transactionHash}`);
-  let assetUnderManagementCap = "1000000000000000";
+  let assetUnderManagementCap = "1000000000000000000000000000";
   tx = await execute("MyDanDefiProxy", { from: deployer, gasLimit: 1000000 }, "setAssetsUnderManagementCap", assetUnderManagementCap);
   console.log(`setAssetsUnderManagementCap ${tx.transactionHash}`);
   let referralBonusRates = [0, 600, 200, 200, 100, 100, 100, 100];
@@ -36,3 +36,4 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 };
 export default func;
 func.tags = ["setup"];
+func.dependencies = ["main"];

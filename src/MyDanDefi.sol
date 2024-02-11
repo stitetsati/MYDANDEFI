@@ -51,6 +51,11 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
         if (i >= membershipTiers.length) {
             revert InvalidArgument(i);
         }
+        require(
+            membershipTiers[i].referralBonusCollectibleLevelLowerBound == updatedMembershipTier.referralBonusCollectibleLevelLowerBound &&
+                membershipTiers[i].referralBonusCollectibleLevelUpperBound == updatedMembershipTier.referralBonusCollectibleLevelUpperBound,
+            "can't modify Bound"
+        );
         membershipTiers[i] = updatedMembershipTier;
         emit MembershipUpdated(i, updatedMembershipTier);
     }
@@ -84,10 +89,6 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
             revert InvalidArgument(rates[0]);
         }
         for (uint256 i = 1; i < rates.length; i++) {
-            if (i == 0 && rates[i] != 0) {
-                // referrla level 0's referralBonusRate has to be 0
-                revert InvalidArgument(rates[i]);
-            }
             emit ReferralBonusRateUpdated(i, rates[i]);
         }
         delete referralBonusRates;
@@ -122,7 +123,10 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
             revert NotTokenOwner(tokenId, msg.sender, myDanPass.ownerOf(tokenId));
         }
         string memory lowerCaseReferralCode = toLowerCase(referralCode);
-        // != generis, cant be used already, not set already for this token Id
+        if (abi.encodePacked(lowerCaseReferralCode).length == 0) {
+            revert InvalidStringArgument();
+        }
+        // != genesis, cant be used already, not set already for this token Id
         if (keccak256(abi.encodePacked(lowerCaseReferralCode)) == keccak256(abi.encodePacked(genesisReferralCode))) {
             revert InvalidStringArgument();
         }
@@ -138,7 +142,7 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
     }
 
     function deposit(uint256 tokenId, uint256 amount, uint256 duration) external nonReentrant returns (uint256) {
-        if (amount < 10 ** IBEP20(targetToken).decimals()) {
+        if (amount < 100 * (10 ** IBEP20(targetToken).decimals())) {
             revert InvalidArgument(amount);
         }
         if (currentAUM + amount > assetsUnderManagementCap) {
@@ -190,7 +194,7 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
             delete deposits[tokenId][depositIds[i]];
         }
         if (withdrawnPrincipal == 0) {
-            return withdrawnPrincipal;
+            return withdrawnPrincipal + interestClaimed;
         }
         currentAUM -= withdrawnPrincipal;
         Profile storage profile = profiles[tokenId];
@@ -245,7 +249,7 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
         if (tokenId == genesisTokenId) {
             return referrers;
         }
-        for (uint256 i = 1; i < totalReferralLevels; i++) {
+        for (uint256 i = 0; i < totalReferralLevels; i++) {
             referrers[i] = referrerTokenId;
             if (referrerTokenId == genesisTokenId) {
                 break;
@@ -423,7 +427,7 @@ contract MyDanDefi is Initializable, UUPSUpgradeable, OwnableUpgradeable, Reentr
             // TODO: precision
             uint256 referralBonusReceivable = ((depositedPrincipal * referralBonusRates[referralLevel]) * duration) / 10000 / 365 days;
             if (referralBonusReceivable == 0) {
-                continue;
+                break;
             }
             uint256 referralBonusId = nextReferralBonusId;
             nextReferralBonusId += 1;

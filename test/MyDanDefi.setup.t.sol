@@ -99,7 +99,7 @@ contract MyDanDefiTestSetup is Test {
     }
 
     modifier Setup() {
-        myDanDefi.setAssetsUnderManagementCap(100 ether);
+        myDanDefi.setAssetsUnderManagementCap(1_000_000_000_000 ether);
         setDurations();
         setMembershipTiers();
         setReferralBonusRates();
